@@ -1,14 +1,21 @@
-import { headers } from "next/headers";
 import { type NextRequest, NextResponse } from "next/server";
-import { auth } from "@/lib/auth";
 
 export async function proxy(request: NextRequest) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+  // fetching the session instead of directly importing from @/lib/db/auth.ts
+  // error `adapterFn is not a function` and `proxy.ts file is not found` keep appearing
+  // this is the workaround solution
+  const response = await fetch(
+    `${request.nextUrl.origin}/api/auth/get-session`,
+    {
+      headers: {
+        cookie: request.headers.get("cookie") || "",
+      },
+    },
+  );
+
+  const session = await response.json().catch(() => null);
 
   const { pathname } = request.nextUrl;
-  console.log(pathname);
   const publicRoutes = ["/", "/sign-in", "/sign-up"];
 
   if (session && publicRoutes.includes(pathname)) {
