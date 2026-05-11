@@ -1,0 +1,303 @@
+import {
+  boolean,
+  date,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgEnum,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  unique,
+  uuid,
+} from "drizzle-orm/pg-core";
+
+export const aiStatus = pgEnum("ai_status", [
+  "idle",
+  "pending",
+  "completed",
+  "failed",
+  "skipped",
+]);
+export const bookmarkType = pgEnum("bookmark_type", ["bookmark", "image"]);
+
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: text().primaryKey().notNull(),
+    identifier: text().notNull(),
+    value: text().notNull(),
+    expiresAt: timestamp("expires_at", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("verification_identifier_idx").using(
+      "btree",
+      table.identifier.asc().nullsLast().op("text_ops"),
+    ),
+  ],
+);
+
+export const users = pgTable(
+  "users",
+  {
+    id: text().primaryKey().notNull(),
+    name: text().notNull(),
+    email: text().notNull(),
+    emailVerified: boolean("email_verified").default(false).notNull(),
+    image: text(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [unique("users_email_unique").on(table.email)],
+);
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: text().primaryKey().notNull(),
+    accountId: text("account_id").notNull(),
+    providerId: text("provider_id").notNull(),
+    userId: text("user_id").notNull(),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at", {
+      mode: "string",
+    }),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at", {
+      mode: "string",
+    }),
+    scope: text(),
+    password: text(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" }).notNull(),
+  },
+  (table) => [
+    index("account_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "accounts_user_id_users_id_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text().primaryKey().notNull(),
+    expiresAt: timestamp("expires_at", { mode: "string" }).notNull(),
+    token: text().notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" }).notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id").notNull(),
+  },
+  (table) => [
+    index("session_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "sessions_user_id_users_id_fk",
+    }).onDelete("cascade"),
+    unique("sessions_token_unique").on(table.token),
+  ],
+);
+
+export const bookmarks = pgTable(
+  "bookmarks",
+  {
+    id: uuid().defaultRandom().primaryKey().notNull(),
+    userId: text("user_id").notNull(),
+    type: bookmarkType().default("bookmark"),
+    url: text(),
+    imagePath: text("image_path"),
+    description: text(),
+    aiStatus: aiStatus("ai_status").default("skipped"),
+    aiError: text("ai_error"),
+    aiMetadata: jsonb("ai_metadata"),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("bookmark_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "bookmarks_user_id_users_id_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const collections = pgTable(
+  "collections",
+  {
+    id: uuid().defaultRandom().primaryKey().notNull(),
+    userId: text("user_id").notNull(),
+    name: text().notNull(),
+    icon: text(),
+    description: text(),
+    bookmarkCount: integer("bookmark_count").default(0).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("collection_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "collections_user_id_users_id_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const userAiUsage = pgTable(
+  "user_ai_usage",
+  {
+    userId: text("user_id").primaryKey().notNull(),
+    callsUsed: integer("calls_used").default(0).notNull(),
+    quotaLimit: integer("quota_limit").default(60).notNull(),
+    periodStart: date("period_start").notNull(),
+    periodEnd: date("period_end").notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("user_ai_usage_periodEnd_idx").using(
+      "btree",
+      table.periodEnd.asc().nullsLast().op("date_ops"),
+    ),
+    index("user_ai_usage_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "user_ai_usage_user_id_users_id_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const userApiKeys = pgTable(
+  "user_api_keys",
+  {
+    userId: text("user_id").primaryKey().notNull(),
+    geminiApiKey: text("gemini_api_key").notNull(),
+    isValid: boolean("is_valid").default(true).notNull(),
+    lastTestedAt: timestamp("last_tested_at", { mode: "string" }).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("user_api_keys_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "user_api_keys_user_id_users_id_fk",
+    }).onDelete("cascade"),
+  ],
+);
+
+export const bookmarkTags = pgTable(
+  "bookmark_tags",
+  {
+    bookmarkId: uuid("bookmark_id").notNull(),
+    name: text().notNull(),
+  },
+  (table) => [
+    index("bookmark_tags_name_idx").using(
+      "btree",
+      table.name.asc().nullsLast().op("text_ops"),
+    ),
+    foreignKey({
+      columns: [table.bookmarkId],
+      foreignColumns: [bookmarks.id],
+      name: "bookmark_tags_bookmark_id_bookmarks_id_fk",
+    }).onDelete("cascade"),
+    primaryKey({
+      columns: [table.name, table.bookmarkId],
+      name: "bookmark_tags_bookmark_id_name_pk",
+    }),
+  ],
+);
+
+export const bookmarkCollections = pgTable(
+  "bookmark_collections",
+  {
+    bookmarkId: uuid("bookmark_id").notNull(),
+    collectionId: uuid("collection_id").notNull(),
+  },
+  (table) => [
+    index("bookmark_collections_bookmarkId_idx").using(
+      "btree",
+      table.bookmarkId.asc().nullsLast().op("uuid_ops"),
+    ),
+    index("bookmark_collections_collectionId_idx").using(
+      "btree",
+      table.collectionId.asc().nullsLast().op("uuid_ops"),
+    ),
+    foreignKey({
+      columns: [table.bookmarkId],
+      foreignColumns: [bookmarks.id],
+      name: "bookmark_collections_bookmark_id_bookmarks_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.collectionId],
+      foreignColumns: [collections.id],
+      name: "bookmark_collections_collection_id_collections_id_fk",
+    }).onDelete("cascade"),
+    primaryKey({
+      columns: [table.collectionId, table.bookmarkId],
+      name: "bookmark_collections_bookmark_id_collection_id_pk",
+    }),
+  ],
+);
