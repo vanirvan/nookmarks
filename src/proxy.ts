@@ -18,6 +18,10 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const publicRoutes = ["/", "/sign-in", "/sign-up"];
 
+  if (pathname === "/app/collections") {
+    return NextResponse.redirect(new URL("/app", request.url));
+  }
+
   if (session && publicRoutes.includes(pathname)) {
     return NextResponse.redirect(new URL("/app", request.url));
   }

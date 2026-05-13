@@ -166,8 +166,6 @@ export const collections = pgTable(
     userId: text("user_id").notNull(),
     name: text().notNull(),
     icon: text(),
-    description: text(),
-    bookmarkCount: integer("bookmark_count").default(0).notNull(),
     createdAt: timestamp("created_at", { mode: "string" })
       .defaultNow()
       .notNull(),
