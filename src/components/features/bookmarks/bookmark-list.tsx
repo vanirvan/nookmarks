@@ -1,10 +1,10 @@
 "use client";
 
+import { useMemo } from "react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks";
 import { useViewStore } from "@/services/features/bookmarks/store/view-store";
-import { Skeleton } from "@/components/ui/skeleton";
 import { BookmarkCard } from "./bookmark-card";
-import { useMemo } from "react";
 
 interface BookmarkListProps {
   collectionId?: string | null;
@@ -26,17 +26,21 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
         (b) =>
           b.url?.toLowerCase().includes(s) ||
           b.description?.toLowerCase().includes(s) ||
-          b.bookmarkTags.some((t) => t.name.toLowerCase().includes(s)),
+          b.bookmarkTags.some((t) => t.tag.title.toLowerCase().includes(s)),
       );
     }
 
     // Sort
     filtered.sort((a, b) => {
       if (sortBy === "newest") {
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        return (
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        );
       }
       if (sortBy === "oldest") {
-        return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        return (
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        );
       }
       if (sortBy === "a-z") {
         const titleA = a.description || a.url || "";
@@ -66,7 +70,9 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
         {Array.from({ length: 8 }).map((_, i) => (
           <Skeleton
             key={i}
-            className={view === "grid" ? "aspect-video rounded-xl" : "h-20 rounded-xl"}
+            className={
+              view === "grid" ? "aspect-video rounded-xl" : "h-20 rounded-xl"
+            }
           />
         ))}
       </div>

@@ -1,13 +1,14 @@
 "use client";
 
+import { X } from "lucide-react";
+import Image from "next/image";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
-  DialogPortal,
   DialogOverlay,
+  DialogPortal,
 } from "@/components/ui/dialog";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 
 interface ImageDialogProps {
   open: boolean;
@@ -20,7 +21,7 @@ export function ImageDialog({ open, onOpenChange, src }: ImageDialogProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay className="bg-black/90 backdrop-blur-md" />
-        <DialogContent 
+        <DialogContent
           showCloseButton={false}
           className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full max-w-none border-none bg-transparent p-0 ring-0 shadow-none flex items-center justify-center pointer-events-none"
         >
@@ -33,11 +34,13 @@ export function ImageDialog({ open, onOpenChange, src }: ImageDialogProps) {
             >
               <X className="h-6 w-6" />
             </Button>
-            
-            <img
+
+            <Image
               src={src}
               alt="Full view"
-              className="max-w-full max-h-full object-contain shadow-2xl rounded-lg"
+              fill
+              className="object-contain"
+              sizes="100vw"
             />
           </div>
         </DialogContent>

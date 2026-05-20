@@ -22,6 +22,15 @@ export const aiStatus = pgEnum("ai_status", [
   "skipped",
 ]);
 export const bookmarkType = pgEnum("bookmark_type", ["bookmark", "image"]);
+export const tagColor = pgEnum("tag_color", [
+  "gray",
+  "green",
+  "red",
+  "yellow",
+  "aqua",
+  "white",
+  "black",
+]);
 
 export const verifications = pgTable(
   "verifications",
@@ -245,25 +254,78 @@ export const userApiKeys = pgTable(
   ],
 );
 
+export const tags = pgTable(
+  "tags",
+  {
+    id: uuid().defaultRandom().primaryKey().notNull(),
+    userId: text("user_id").notNull(),
+    title: text().notNull(),
+    description: text().default(""),
+    color: tagColor().default("gray").notNull(),
+    parent: uuid(),
+    pinned: boolean().default(false).notNull(),
+    createdAt: timestamp("created_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { mode: "string" })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("tag_userId_idx").using(
+      "btree",
+      table.userId.asc().nullsLast().op("text_ops"),
+    ),
+    index("tag_parent_idx").using(
+      "btree",
+      table.parent.asc().nullsLast().op("uuid_ops"),
+    ),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: "tags_user_id_users_id_fk",
+    }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.parent],
+      foreignColumns: [table.id],
+      name: "tags_parent_tags_id_fk",
+    }).onDelete("cascade"),
+    unique("tags_title_parent_userId_unique").on(
+      table.title,
+      table.parent,
+      table.userId,
+    ),
+  ],
+);
+
 export const bookmarkTags = pgTable(
   "bookmark_tags",
   {
     bookmarkId: uuid("bookmark_id").notNull(),
-    name: text().notNull(),
+    tagId: uuid("tag_id").notNull(),
   },
   (table) => [
-    index("bookmark_tags_name_idx").using(
+    index("bookmark_tags_bookmarkId_idx").using(
       "btree",
-      table.name.asc().nullsLast().op("text_ops"),
+      table.bookmarkId.asc().nullsLast().op("uuid_ops"),
+    ),
+    index("bookmark_tags_tagId_idx").using(
+      "btree",
+      table.tagId.asc().nullsLast().op("uuid_ops"),
     ),
     foreignKey({
       columns: [table.bookmarkId],
       foreignColumns: [bookmarks.id],
       name: "bookmark_tags_bookmark_id_bookmarks_id_fk",
     }).onDelete("cascade"),
+    foreignKey({
+      columns: [table.tagId],
+      foreignColumns: [tags.id],
+      name: "bookmark_tags_tag_id_tags_id_fk",
+    }).onDelete("cascade"),
     primaryKey({
-      columns: [table.name, table.bookmarkId],
-      name: "bookmark_tags_bookmark_id_name_pk",
+      columns: [table.bookmarkId, table.tagId],
+      name: "bookmark_tags_bookmark_id_tag_id_pk",
     }),
   ],
 );

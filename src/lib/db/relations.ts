@@ -6,6 +6,7 @@ import {
   bookmarkTags,
   collections,
   sessions,
+  tags,
   userAiUsage,
   userApiKeys,
   users,
@@ -23,6 +24,7 @@ export const usersRelations = relations(users, ({ many }) => ({
   sessions: many(sessions),
   bookmarks: many(bookmarks),
   collections: many(collections),
+  tags: many(tags),
   userAiUsages: many(userAiUsage),
   userApiKeys: many(userApiKeys),
 }));
@@ -70,6 +72,26 @@ export const bookmarkTagsRelations = relations(bookmarkTags, ({ one }) => ({
     fields: [bookmarkTags.bookmarkId],
     references: [bookmarks.id],
   }),
+  tag: one(tags, {
+    fields: [bookmarkTags.tagId],
+    references: [tags.id],
+  }),
+}));
+
+export const tagsRelations = relations(tags, ({ one, many }) => ({
+  user: one(users, {
+    fields: [tags.userId],
+    references: [users.id],
+  }),
+  parent: one(tags, {
+    fields: [tags.parent],
+    references: [tags.id],
+    relationName: "tagHierarchy",
+  }),
+  children: many(tags, {
+    relationName: "tagHierarchy",
+  }),
+  bookmarkTags: many(bookmarkTags),
 }));
 
 export const bookmarkCollectionsRelations = relations(

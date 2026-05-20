@@ -6,6 +6,7 @@ import {
   bookmarkCollections,
   bookmarks,
   bookmarkTags,
+  tags,
   userAiUsage,
   userApiKeys,
 } from "@/lib/db/schema";
@@ -16,6 +17,7 @@ import {
   deleteBookmarkSchema,
   updateBookmarkSchema,
 } from "@/lib/validations/bookmarks";
+import { createNestedTags } from "@/services/features/tags/actions/tags.actions";
 
 export const createBookmark = createSafeAction(
   createBookmarkSchema,
@@ -111,12 +113,28 @@ export const createBookmark = createSafeAction(
       }
 
       if (validatedData.tags && validatedData.tags.length > 0) {
-        await tx.insert(bookmarkTags).values(
-          validatedData.tags.map((tag) => ({
-            bookmarkId: newBookmark.id,
-            name: tag.toLowerCase().trim(),
-          })),
-        );
+        const tagIds: string[] = [];
+
+        for (const tag of validatedData.tags) {
+          if (typeof tag === "string" && tag.startsWith("create:")) {
+            const path = tag.replace("create:", "");
+            const result = await createNestedTags({ path });
+            if (result.success && result.data) {
+              tagIds.push(result.data);
+            }
+          } else if (typeof tag === "string") {
+            tagIds.push(tag);
+          }
+        }
+
+        if (tagIds.length > 0) {
+          await tx.insert(bookmarkTags).values(
+            tagIds.map((tagId) => ({
+              bookmarkId: newBookmark.id,
+              tagId: tagId,
+            })),
+          );
+        }
       }
 
       if (
@@ -165,7 +183,11 @@ export const getBookmarks = createSafeAction(
               : undefined,
         ),
       with: {
-        bookmarkTags: true,
+        bookmarkTags: {
+          with: {
+            tag: true,
+          },
+        },
         bookmarkCollections: {
           with: {
             collection: true,
@@ -244,14 +266,18 @@ export const searchBookmarks = createSafeAction(
                 .where(
                   and(
                     eq(bookmarkTags.bookmarkId, bookmarks.id),
-                    ilike(bookmarkTags.name, searchPattern),
+                    ilike(bookmarkTags.tagId, searchPattern),
                   ),
                 ),
             ),
           ),
         ),
       with: {
-        bookmarkTags: true,
+        bookmarkTags: {
+          with: {
+            tag: true,
+          },
+        },
         bookmarkCollections: {
           with: {
             collection: true,
@@ -281,7 +307,11 @@ export const getBookmarksByIds = createSafeAction(
           inArray(bookmarks.id, data.ids),
         ),
       with: {
-        bookmarkTags: true,
+        bookmarkTags: {
+          with: {
+            tag: true,
+          },
+        },
         bookmarkCollections: {
           with: {
             collection: true,
@@ -327,12 +357,28 @@ export const updateBookmark = createSafeAction(
         .where(eq(bookmarkTags.bookmarkId, validatedData.id));
 
       if (validatedData.tags && validatedData.tags.length > 0) {
-        await tx.insert(bookmarkTags).values(
-          validatedData.tags.map((tag) => ({
-            bookmarkId: validatedData.id,
-            name: tag.toLowerCase().trim(),
-          })),
-        );
+        const tagIds: string[] = [];
+
+        for (const tag of validatedData.tags) {
+          if (typeof tag === "string" && tag.startsWith("create:")) {
+            const path = tag.replace("create:", "");
+            const result = await createNestedTags({ path });
+            if (result.success && result.data) {
+              tagIds.push(result.data);
+            }
+          } else if (typeof tag === "string") {
+            tagIds.push(tag);
+          }
+        }
+
+        if (tagIds.length > 0) {
+          await tx.insert(bookmarkTags).values(
+            tagIds.map((tagId) => ({
+              bookmarkId: validatedData.id,
+              tagId: tagId,
+            })),
+          );
+        }
       }
 
       const newCollectionIds = validatedData.collectionIds || [];
@@ -356,13 +402,12 @@ export const updateBookmark = createSafeAction(
 );
 
 export const getUserTags = createSafeAction(null, async (_, session) => {
-  const result = await db
-    .selectDistinct({ name: bookmarkTags.name })
-    .from(bookmarkTags)
-    .innerJoin(bookmarks, eq(bookmarks.id, bookmarkTags.bookmarkId))
-    .where(eq(bookmarks.userId, session.user.id));
+  const result = await db.query.tags.findMany({
+    where: eq(tags.userId, session.user.id),
+    orderBy: [tags.title],
+  });
 
-  return result.map((r) => r.name);
+  return result;
 });
 
 export const getAllBookmarksCount = createSafeAction(
@@ -398,5 +443,3 @@ export const getUnsortedBookmarksCount = createSafeAction(
     return Number(result[0]?.count || 0);
   },
 );
-
-
