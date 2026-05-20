@@ -1,17 +1,29 @@
+"use client";
+
+import { useCollections } from "@/services/features/collections/hooks/use-collections";
+import { BookmarkPage } from "@/components/features/bookmarks/bookmark-page";
+import { use } from "react";
+
 export default function CollectionPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = use(params);
+  const { data: collections } = useCollections();
+  const collection = collections?.find((c) => c.id === id);
+
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-bold">Collection</h1>
-      <p className="text-muted-foreground">
-        Welcome to collection page. Collection ID: {params.id}
-      </p>
-      <p className="text-muted-foreground text-sm">
-        Bookmarks in this collection will appear here.
-      </p>
-    </div>
+    <BookmarkPage
+      title={collection?.name ?? "Collection"}
+      description={
+        collection
+          ? `Viewing bookmarks in ${collection.name}.`
+          : "Viewing bookmarks in this collection."
+      }
+      iconName={collection?.icon}
+      fallbackIconName="Folder"
+      collectionId={id}
+    />
   );
 }

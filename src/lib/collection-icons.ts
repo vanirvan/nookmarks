@@ -27,7 +27,9 @@ import {
   HeartIcon,
   HomeIcon,
   ImageIcon,
+  InboxIcon,
   LayersIcon,
+  LayoutDashboardIcon,
   LayoutIcon,
   LightbulbIcon,
   LinkIcon,
@@ -127,6 +129,8 @@ export const COLLECTION_ICONS: Record<string, LucideIcon> = {
   ToolBox: ToolboxIcon,
   Truck: TruckIcon,
   Umbrella: UmbrellaIcon,
+  LayoutDashboard: LayoutDashboardIcon,
+  Inbox: InboxIcon,
 };
 
 export const AVAILABLE_ICONS = Object.entries(COLLECTION_ICONS).map(
