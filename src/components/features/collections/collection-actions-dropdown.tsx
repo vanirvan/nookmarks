@@ -1,3 +1,4 @@
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -6,7 +7,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenuAction } from "@/components/ui/sidebar";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
 interface CollectionActionsDropdownProps {
   onEditClick: () => void;

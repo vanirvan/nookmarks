@@ -16,8 +16,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
 import { AVAILABLE_ICONS } from "@/lib/collection-icons";
+import { cn } from "@/lib/utils";
 import { updateCollectionSchema } from "@/lib/validations/collections";
 import { updateCollection } from "@/services/features/collections/actions/collections.actions";
 
@@ -139,7 +139,7 @@ export function EditCollectionDialog({
                 className="mb-2"
               />
 
-              <div className="grid max-h-[200px] grid-cols-8 gap-2 overflow-y-auto rounded-md border bg-background/50 p-2">
+              <div className="grid max-h-50 grid-cols-8 gap-2 overflow-y-auto rounded-md border bg-background/50 p-2">
                 {filteredIcons.map(({ name, icon: Icon }) => (
                   <button
                     key={name}

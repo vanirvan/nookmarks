@@ -1,8 +1,8 @@
 "use client";
 
-import { Pencil, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { mutate } from "swr";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { deleteCollection } from "@/services/features/collections/actions/collections.actions";
 
 interface DeleteCollectionDialogProps {

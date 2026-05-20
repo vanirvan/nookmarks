@@ -1,13 +1,12 @@
 "use client";
 
-import { MoreVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
-import { CreateCollectionDialog } from "@/components/features/collections/create-collection-dialog";
-import { EditCollectionDialog } from "@/components/features/collections/edit-collection-dialog";
-import { DeleteCollectionDialog } from "@/components/features/collections/delete-collection-dialog";
-import { Button } from "@/components/ui/button";
 import { CollectionActionsDropdown } from "@/components/features/collections/collection-actions-dropdown";
+import { CreateCollectionDialog } from "@/components/features/collections/create-collection-dialog";
+import { DeleteCollectionDialog } from "@/components/features/collections/delete-collection-dialog";
+import { EditCollectionDialog } from "@/components/features/collections/edit-collection-dialog";
 import {
   SidebarGroup,
   SidebarGroupAction,

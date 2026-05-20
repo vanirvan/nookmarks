@@ -1,6 +1,5 @@
 "use client";
 
-import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 import { PageHeader } from "@/components/features/app/page-header";
 import { BookmarkList } from "@/components/features/bookmarks/bookmark-list";
 

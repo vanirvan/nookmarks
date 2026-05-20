@@ -1,5 +1,3 @@
-
-
 import { NavCollections } from "@/components/features/app/sidebar/nav-collections";
 import { NavMain } from "@/components/features/app/sidebar/nav-main";
 import { NavUser } from "@/components/features/app/sidebar/nav-user";
@@ -25,4 +23,3 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     </Sidebar>
   );
 }
-
