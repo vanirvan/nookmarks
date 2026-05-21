@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 import { PageHeader } from "@/components/features/app/page-header";
-import { BookmarkList } from "@/components/features/bookmarks/bookmark-list";
 import { AddBookmarkDialog } from "@/components/features/bookmarks/add-bookmark-dialog";
+import { BookmarkList } from "@/components/features/bookmarks/bookmark-list";
 
 interface BookmarkPageProps {
   title: string;
@@ -21,6 +22,13 @@ export function BookmarkPage({
   iconName,
 }: BookmarkPageProps) {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get("add-url")) {
+      setAddDialogOpen(true);
+    }
+  }, [searchParams]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -32,11 +40,8 @@ export function BookmarkPage({
         onAddClick={() => setAddDialogOpen(true)}
       />
       <BookmarkList collectionId={collectionId} />
-      
-      <AddBookmarkDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-      />
+
+      <AddBookmarkDialog open={addDialogOpen} onOpenChange={setAddDialogOpen} />
     </div>
   );
 }

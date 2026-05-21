@@ -75,9 +75,39 @@ export function AddBookmarkDialog({
 
   useEffect(() => {
     if (!open) {
-      form.reset();
+      form.reset({
+        type: "bookmark" as const,
+        url: "",
+        description: "",
+        tags: [],
+        collectionIds: [],
+      });
       setDuplicates([]);
       setFaviconError(false);
+    } else {
+      if (typeof window !== "undefined") {
+        const searchParams = new URLSearchParams(window.location.search);
+        const url = searchParams.get("add-url");
+        const title = searchParams.get("add-title");
+        if (url) {
+          form.setValue("url", url);
+          if (title) {
+            form.setValue("description", title);
+          }
+          // Clean up the URL search params so they don't persist on subsequent opens
+          const cleanedSearch = window.location.search
+            .replace(/[?&]add-url=[^&]*/, "")
+            .replace(/[?&]add-title=[^&]*/, "")
+            .replace(/^&/, "?")
+            .replace(/\?$/, "");
+          const newUrl =
+            window.location.pathname +
+            (cleanedSearch.startsWith("?") || cleanedSearch === ""
+              ? cleanedSearch
+              : `?${cleanedSearch}`);
+          window.history.replaceState({}, "", newUrl);
+        }
+      }
     }
   }, [open, form]);
 
