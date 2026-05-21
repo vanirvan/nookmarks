@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getFileUrl } from "@/lib/server/s3.server";
 import { cn } from "@/lib/utils";
+import { DeleteBookmarkDialog } from "./delete-bookmark-dialog";
 import { EditBookmarkDialog } from "./edit-bookmark-dialog";
 import { ImageDialog } from "./image-dialog";
 
@@ -74,6 +75,7 @@ export function BookmarkCard({
 }: BookmarkCardProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
   const isImage = bookmark.type === "image";
   const imageUrl =
@@ -409,6 +411,7 @@ export function BookmarkCard({
             <DropdownMenuItem
               variant="destructive"
               className="text-destructive focus:text-destructive"
+              onClick={() => setDeleteDialogOpen(true)}
             >
               <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete
             </DropdownMenuItem>
@@ -427,6 +430,12 @@ export function BookmarkCard({
       <EditBookmarkDialog
         open={editDialogOpen}
         onOpenChange={setEditDialogOpen}
+        bookmark={bookmark}
+      />
+
+      <DeleteBookmarkDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
         bookmark={bookmark}
       />
     </div>

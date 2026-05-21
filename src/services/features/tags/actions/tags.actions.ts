@@ -1,8 +1,8 @@
 "use server";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bookmarkTags, tags, bookmarks } from "@/lib/db/schema";
+import { bookmarks, bookmarkTags, tags } from "@/lib/db/schema";
 import { createSafeAction } from "@/lib/safe-action";
 import {
   createTagSchema,
@@ -190,54 +190,51 @@ export const deleteTag = createSafeAction(
     const descendants = await getDescendantTags(tagId, session.user.id);
     const allTagIds = [tagId, ...descendants.map((t) => t.id)];
 
-    await db
-      .delete(bookmarkTags)
-      .where(sql`${bookmarkTags.tagId} = ANY(${allTagIds})`);
+    await db.delete(bookmarkTags).where(inArray(bookmarkTags.tagId, allTagIds));
 
-    await db.delete(tags).where(sql`${tags.id} = ANY(${allTagIds})`);
+    await db.delete(tags).where(inArray(tags.id, allTagIds));
 
     return { success: true };
   },
 );
 
-export const getTagItemCounts = createSafeAction(
-  null,
-  async (_, session) => {
-    const allTags = await db.query.tags.findMany({
-      where: eq(tags.userId, session.user.id),
-    });
+export const getTagItemCounts = createSafeAction(null, async (_, session) => {
+  const allTags = await db.query.tags.findMany({
+    where: eq(tags.userId, session.user.id),
+  });
 
-    const allBookmarks = await db.query.bookmarks.findMany({
-      where: eq(bookmarks.userId, session.user.id),
-      with: {
-        bookmarkTags: true,
-      },
-    });
+  const allBookmarks = await db.query.bookmarks.findMany({
+    where: eq(bookmarks.userId, session.user.id),
+    with: {
+      bookmarkTags: true,
+    },
+  });
 
-    const tagsWithPaths = computeTagPaths(allTags);
-    const counts: Record<string, number> = {};
+  const tagsWithPaths = computeTagPaths(allTags);
+  const counts: Record<string, number> = {};
 
-    for (const tag of tagsWithPaths) {
-      const descendantTags = tagsWithPaths.filter(
-        (t) =>
-          t.fullPathIDs === tag.fullPathIDs ||
-          t.fullPathIDs.startsWith(tag.fullPathIDs + "/"),
-      );
-      const tagIdsToCount = descendantTags.map((t) => t.id);
+  for (const tag of tagsWithPaths) {
+    const descendantTags = tagsWithPaths.filter(
+      (t) =>
+        t.fullPathIDs === tag.fullPathIDs ||
+        t.fullPathIDs.startsWith(`${tag.fullPathIDs}/`),
+    );
+    const tagIdsToCount = descendantTags.map((t) => t.id);
 
-      const uniqueBookmarks = new Set<string>();
-      for (const bookmark of allBookmarks) {
-        if (bookmark.bookmarkTags.some((bt) => tagIdsToCount.includes(bt.tagId))) {
-          uniqueBookmarks.add(bookmark.id);
-        }
+    const uniqueBookmarks = new Set<string>();
+    for (const bookmark of allBookmarks) {
+      if (
+        bookmark.bookmarkTags.some((bt) => tagIdsToCount.includes(bt.tagId))
+      ) {
+        uniqueBookmarks.add(bookmark.id);
       }
-
-      counts[tag.id] = uniqueBookmarks.size;
     }
 
-    return counts;
-  },
-);
+    counts[tag.id] = uniqueBookmarks.size;
+  }
+
+  return counts;
+});
 
 async function getDescendantTags(
   parentId: string,

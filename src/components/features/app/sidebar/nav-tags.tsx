@@ -3,6 +3,7 @@
 import { ChevronRight, Pin, Plus, Search, Tag } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
 import { CreateTagDialog } from "@/components/features/tags/create-tag-dialog";
 import { DeleteTagDialog } from "@/components/features/tags/delete-tag-dialog";
 import { EditTagDialog } from "@/components/features/tags/edit-tag-dialog";
@@ -24,11 +25,6 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
 import { usePreferencesStore } from "@/services/features/bookmarks/store/preferences-store";
 import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 import {
@@ -56,6 +52,7 @@ export function NavTags() {
   const { data: itemCounts } = useTagItemCounts();
   const { displaySidebarTagItemCounts } = usePreferencesStore();
   const { tagFilter, setTagFilter } = useViewStore();
+  const { mutate: globalMutate } = useSWRConfig();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
@@ -68,6 +65,7 @@ export function NavTags() {
     if (result.success) {
       toast.success("Tag updated");
       mutate();
+      globalMutate((key) => Array.isArray(key) && key[0] === "bookmarks");
     } else {
       toast.error(result.error || "Failed to update tag");
     }
@@ -81,6 +79,7 @@ export function NavTags() {
     if (result.success) {
       toast.success("Color updated");
       mutate();
+      globalMutate((key) => Array.isArray(key) && key[0] === "bookmarks");
     } else {
       toast.error(result.error || "Failed to update color");
     }
@@ -269,7 +268,9 @@ function TagTreeItem({
               />
             }
           >
-            <ChevronRight className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
+            <ChevronRight
+              className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
+            />
           </CollapsibleTrigger>
         )}
         <SidebarMenuButton

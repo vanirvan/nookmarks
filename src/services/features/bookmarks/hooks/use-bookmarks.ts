@@ -12,7 +12,12 @@ export function useBookmarks(collectionId?: string | null) {
     async () => {
       const response = await getBookmarks({
         collectionId,
-        tagId: tagFilter === "untagged" ? null : tagFilter,
+        tagId:
+          tagFilter === null
+            ? undefined
+            : tagFilter === "untagged"
+              ? null
+              : tagFilter,
         includeNestedTags: includeNestedTagItems,
       });
       if (!response.success) {

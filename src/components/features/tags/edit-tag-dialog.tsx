@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ interface EditTagDialogProps {
 export function EditTagDialog({ open, onOpenChange, tag }: EditTagDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
   const { data: allTags, mutate } = useTags();
+  const { mutate: globalMutate } = useSWRConfig();
 
   const form = useForm({
     resolver: zodResolver(schema),
@@ -64,6 +66,8 @@ export function EditTagDialog({ open, onOpenChange, tag }: EditTagDialogProps) {
       if (result.success) {
         toast.success("Tag updated successfully");
         mutate();
+        globalMutate((key) => Array.isArray(key) && key[0] === "bookmarks");
+        globalMutate("tag-item-counts");
         onOpenChange(false);
       } else {
         toast.error(result.error || "Failed to update tag");
