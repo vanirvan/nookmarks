@@ -219,6 +219,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
               <DropdownMenuItem
                 variant="destructive"
                 className="text-destructive focus:text-destructive"
+                onClick={() => setDeleteDialogOpen(true)}
               >
                 <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete
               </DropdownMenuItem>
@@ -237,6 +238,12 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
         <EditBookmarkDialog
           open={editDialogOpen}
           onOpenChange={setEditDialogOpen}
+          bookmark={bookmark}
+        />
+
+        <DeleteBookmarkDialog
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
           bookmark={bookmark}
         />
       </div>
