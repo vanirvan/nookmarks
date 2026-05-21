@@ -1,0 +1,698 @@
+"use client";
+
+import {
+  type ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  type SortingState,
+  useReactTable,
+  type VisibilityState,
+} from "@tanstack/react-table";
+import { formatDistanceToNow } from "date-fns";
+import {
+  ArrowUpDown,
+  ExternalLink,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Settings2,
+  Trash2,
+} from "lucide-react";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { getFileUrl } from "@/lib/server/s3.server";
+import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
+
+import { DeleteBookmarkDialog } from "./delete-bookmark-dialog";
+import { EditBookmarkDialog } from "./edit-bookmark-dialog";
+import { ImageDialog } from "./image-dialog";
+
+type BookmarkTag = {
+  bookmarkId: string;
+  tagId: string;
+  tag: {
+    id: string;
+    title: string;
+    color: string;
+  };
+};
+
+type Bookmark = {
+  id: string;
+  userId: string;
+  type: "bookmark" | "image" | null;
+  url: string | null;
+  imagePath: string | null;
+  description: string | null;
+  title?: string | null;
+  aiStatus: string | null;
+  aiError: string | null;
+  aiMetadata?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+  bookmarkTags: BookmarkTag[];
+  bookmarkCollections: Array<{
+    bookmarkId: string;
+    collectionId: string;
+    collection: {
+      id: string;
+      name: string;
+    };
+  }>;
+};
+
+interface BookmarkTableProps {
+  bookmarks: Bookmark[];
+}
+
+function BookmarkImageCell({ bookmark }: { bookmark: Bookmark }) {
+  const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [faviconError, setFaviconError] = useState(false);
+  const isImage = bookmark.type === "image";
+  const imageUrl =
+    isImage && bookmark.imagePath ? getFileUrl(bookmark.imagePath) : null;
+  const metadata = (bookmark.aiMetadata || {}) as Record<string, string>;
+  const favicon = metadata.favicon || "";
+  const ogImage = metadata.ogImage || "";
+
+  let domain = "";
+  try {
+    if (bookmark.url) {
+      domain = new URL(bookmark.url).hostname;
+    }
+  } catch {}
+
+  return (
+    <div className="flex items-center shrink-0">
+      {isImage ? (
+        <button
+          type="button"
+          className="h-10 w-10 rounded-lg overflow-hidden bg-muted relative cursor-zoom-in text-left border hover:scale-105 transition-transform"
+          onClick={() => setImageDialogOpen(true)}
+        >
+          <Image
+            src={imageUrl ?? ""}
+            alt=""
+            fill
+            unoptimized
+            className="object-cover"
+          />
+        </button>
+      ) : ogImage ? (
+        <div className="h-10 w-10 rounded-lg overflow-hidden bg-muted relative border">
+          <Image
+            src={ogImage}
+            alt=""
+            fill
+            unoptimized
+            className="object-cover"
+          />
+        </div>
+      ) : (
+        <div className="h-10 w-10 rounded-lg bg-primary/5 flex items-center justify-center overflow-hidden border">
+          {favicon && !faviconError ? (
+            <Image
+              src={favicon}
+              alt=""
+              width={20}
+              height={20}
+              unoptimized
+              className="h-5 w-5 object-contain"
+              onError={() => setFaviconError(true)}
+            />
+          ) : domain && !faviconError ? (
+            <Image
+              src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+              alt=""
+              width={20}
+              height={20}
+              unoptimized
+              className="h-5 w-5 object-contain"
+              onError={() => setFaviconError(true)}
+            />
+          ) : (
+            <ExternalLink className="h-4 w-4 text-primary/40" />
+          )}
+        </div>
+      )}
+
+      {isImage && (
+        <ImageDialog
+          open={imageDialogOpen}
+          onOpenChange={setImageDialogOpen}
+          src={imageUrl ?? ""}
+        />
+      )}
+    </div>
+  );
+}
+
+function BookmarkActionsCell({ bookmark }: { bookmark: Bookmark }) {
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
+  return (
+    <div className="flex items-center justify-center">
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button variant="ghost" size="icon-sm" className="h-7 w-7 p-0" />
+          }
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
+            <Pencil className="mr-2 h-4 w-4" /> Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            className="text-destructive focus:text-destructive"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <EditBookmarkDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        bookmark={bookmark}
+      />
+
+      <DeleteBookmarkDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        bookmark={bookmark}
+      />
+    </div>
+  );
+}
+
+export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
+  const { selectedIds, toggleSelection, setSelectedIds } = useSelectionStore();
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: "createdAt", desc: true },
+  ]);
+
+  // Load column visibility from localStorage if exists
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
+    () => {
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("bookmark-table-columns");
+        if (saved) {
+          try {
+            return JSON.parse(saved);
+          } catch {}
+        }
+      }
+      return {
+        image: true,
+        title: true,
+        url: true,
+        tags: true,
+        description: false,
+        createdAt: true,
+      };
+    },
+  );
+
+  // Persist column visibility when changed
+  useEffect(() => {
+    localStorage.setItem(
+      "bookmark-table-columns",
+      JSON.stringify(columnVisibility),
+    );
+  }, [columnVisibility]);
+
+  const columns = useMemo<ColumnDef<Bookmark>[]>(
+    () => [
+      {
+        id: "select",
+        header: ({ table }) => {
+          const currentPageRows = table
+            .getRowModel()
+            .rows.map((r) => r.original.id);
+          const allSelected =
+            currentPageRows.length > 0 &&
+            currentPageRows.every((id) => selectedIds.includes(id));
+          const someSelected =
+            !allSelected &&
+            currentPageRows.some((id) => selectedIds.includes(id));
+
+          return (
+            <div className="flex items-center justify-center p-1">
+              <Checkbox
+                checked={allSelected}
+                indeterminate={someSelected}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    // Union of current selection and page rows
+                    const newSelection = Array.from(
+                      new Set([...selectedIds, ...currentPageRows]),
+                    );
+                    setSelectedIds(newSelection);
+                  } else {
+                    // Remove page rows from selection
+                    const pageRowsSet = new Set(currentPageRows);
+                    const newSelection = selectedIds.filter(
+                      (id) => !pageRowsSet.has(id),
+                    );
+                    setSelectedIds(newSelection);
+                  }
+                }}
+              />
+            </div>
+          );
+        },
+        cell: ({ row }) => {
+          const isSelected = selectedIds.includes(row.original.id);
+          return (
+            <div className="flex items-center justify-center p-1">
+              <Checkbox
+                checked={isSelected}
+                onCheckedChange={() => toggleSelection(row.original.id)}
+              />
+            </div>
+          );
+        },
+        enableHiding: false,
+      },
+      {
+        id: "image",
+        header: "Preview",
+        cell: ({ row }) => <BookmarkImageCell bookmark={row.original} />,
+      },
+      {
+        accessorKey: "title",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-1 gap-1 text-xs"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Title
+            <ArrowUpDown className="h-3 w-3" />
+          </Button>
+        ),
+        sortingFn: (rowA, rowB) => {
+          const metaA = (rowA.original.aiMetadata || {}) as Record<
+            string,
+            string
+          >;
+          const metaB = (rowB.original.aiMetadata || {}) as Record<
+            string,
+            string
+          >;
+          const titleA =
+            metaA.extractedTitle ||
+            rowA.original.description ||
+            rowA.original.url ||
+            "";
+          const titleB =
+            metaB.extractedTitle ||
+            rowB.original.description ||
+            rowB.original.url ||
+            "";
+          return titleA.localeCompare(titleB);
+        },
+        cell: ({ row }) => {
+          const bookmark = row.original;
+          const metadata = (bookmark.aiMetadata || {}) as Record<
+            string,
+            string
+          >;
+          const title =
+            metadata.extractedTitle ||
+            bookmark.description ||
+            bookmark.url ||
+            "";
+          const isLoadingMetadata = bookmark.aiStatus === "pending";
+
+          return (
+            <div className="flex items-center gap-2 max-w-[240px] lg:max-w-[320px]">
+              {isLoadingMetadata && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
+              )}
+              {bookmark.url ? (
+                <a
+                  href={bookmark.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium text-foreground hover:text-primary transition-colors hover:underline truncate"
+                >
+                  {title}
+                </a>
+              ) : (
+                <span className="font-medium text-foreground truncate">
+                  {title}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "url",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-1 gap-1 text-xs"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            URL
+            <ArrowUpDown className="h-3 w-3" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const url = row.original.url;
+          return url ? (
+            <a
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-muted-foreground hover:text-primary truncate block max-w-[180px]"
+            >
+              {url}
+            </a>
+          ) : (
+            <span className="text-xs text-muted-foreground italic">
+              Image File
+            </span>
+          );
+        },
+      },
+      {
+        id: "tags",
+        header: "Tags",
+        cell: ({ row }) => {
+          const tags = row.original.bookmarkTags || [];
+          if (tags.length === 0)
+            return <span className="text-xs text-muted-foreground/50">—</span>;
+
+          return (
+            <div className="flex flex-wrap gap-1 max-w-[180px]">
+              {tags.slice(0, 2).map((bt) => (
+                <span
+                  key={bt.tag.id}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground border shrink-0"
+                >
+                  {bt.tag.title}
+                </span>
+              ))}
+              {tags.length > 2 && (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-muted text-muted-foreground border shrink-0">
+                  +{tags.length - 2}
+                </span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        accessorKey: "description",
+        header: "Description",
+        cell: ({ row }) => {
+          const bookmark = row.original;
+          const metadata = (bookmark.aiMetadata || {}) as Record<
+            string,
+            string
+          >;
+          const description =
+            metadata.extractedDescription || bookmark.description || "";
+          return description ? (
+            <span className="text-xs text-muted-foreground line-clamp-2 max-w-[280px]">
+              {description}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground/45 italic">
+              No description
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "createdAt",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="px-1 gap-1 text-xs"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          >
+            Created
+            <ArrowUpDown className="h-3 w-3" />
+          </Button>
+        ),
+        cell: ({ row }) => {
+          const date = new Date(row.original.createdAt);
+          return (
+            <span className="text-xs text-muted-foreground whitespace-nowrap">
+              {formatDistanceToNow(date, { addSuffix: true })}
+            </span>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: () => <div className="text-center">Actions</div>,
+        cell: ({ row }) => <BookmarkActionsCell bookmark={row.original} />,
+        enableHiding: false,
+      },
+    ],
+    [selectedIds, toggleSelection, setSelectedIds],
+  );
+
+  const table = useReactTable({
+    data: bookmarks,
+    columns,
+    state: {
+      sorting,
+      columnVisibility,
+    },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    initialState: {
+      pagination: {
+        pageSize: 10,
+      },
+    },
+  });
+
+  const pageCount = table.getPageCount();
+  const pageIndex = table.getState().pagination.pageIndex;
+  const pageSize = table.getState().pagination.pageSize;
+  const totalRows = bookmarks.length;
+  const startRow = pageIndex * pageSize + 1;
+  const endRow = Math.min((pageIndex + 1) * pageSize, totalRows);
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Table controls */}
+      <div className="flex justify-end items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 gap-1.5 text-xs"
+              >
+                <Settings2 className="h-3.5 w-3.5" />
+                <span>Columns</span>
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="end" className="w-44">
+            {table
+              .getAllColumns()
+              .filter((column) => column.getCanHide())
+              .map((column) => (
+                <DropdownMenuCheckboxItem
+                  key={column.id}
+                  checked={column.getIsVisible()}
+                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
+                >
+                  <span className="capitalize">{column.id}</span>
+                </DropdownMenuCheckboxItem>
+              ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {/* Main Table wrapper */}
+      <div className="rounded-xl border bg-card/45 backdrop-blur-xs overflow-hidden shadow-xs">
+        <Table>
+          <TableHeader>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                {headerGroup.headers.map((header) => (
+                  <TableHead
+                    key={header.id}
+                    className="font-semibold text-xs py-2.5"
+                  >
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(
+                          header.column.columnDef.header,
+                          header.getContext(),
+                        )}
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+          <TableBody>
+            {table.getRowModel().rows.length > 0 ? (
+              table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  data-state={
+                    selectedIds.includes(row.original.id) && "selected"
+                  }
+                  className="group/row transition-all duration-150 hover:bg-muted/40"
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className="py-2.5">
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext(),
+                      )}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              <TableRow>
+                <TableCell
+                  colSpan={columns.length}
+                  className="h-32 text-center text-muted-foreground/80"
+                >
+                  No bookmarks found.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Table Pagination */}
+      {totalRows > 0 && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 px-1">
+          <div className="text-xs text-muted-foreground">
+            Showing{" "}
+            <span className="font-medium text-foreground">{startRow}</span> to{" "}
+            <span className="font-medium text-foreground">{endRow}</span> of{" "}
+            <span className="font-medium text-foreground">{totalRows}</span>{" "}
+            bookmarks
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Page Size Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                Rows per page:
+              </span>
+              <select
+                value={pageSize}
+                onChange={(e) => table.setPageSize(Number(e.target.value))}
+                className="h-8 rounded-lg border border-input bg-background/50 px-2 py-1 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
+              >
+                {[10, 25, 50, 100].map((size) => (
+                  <option key={size} value={size}>
+                    {size}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Pagination Action Buttons */}
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs px-2"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
+              >
+                Prev
+              </Button>
+
+              {/* Responsive Page Numbers */}
+              {Array.from({ length: pageCount }, (_, i) => i).map(
+                (pageNumber) => {
+                  // Show current page, first, last, and immediate surrounding pages
+                  const isFirst = pageNumber === 0;
+                  const isLast = pageNumber === pageCount - 1;
+                  const isAround = Math.abs(pageNumber - pageIndex) <= 1;
+
+                  if (!isFirst && !isLast && !isAround) {
+                    // Show ellipsis for gaps
+                    if (pageNumber === 1 || pageNumber === pageCount - 2) {
+                      return (
+                        <span
+                          key={`ellipsis-${pageNumber}`}
+                          className="text-xs px-1 text-muted-foreground/60 select-none"
+                        >
+                          ...
+                        </span>
+                      );
+                    }
+                    return null;
+                  }
+
+                  return (
+                    <Button
+                      key={`page-${pageNumber}`}
+                      variant={pageIndex === pageNumber ? "default" : "outline"}
+                      size="icon-sm"
+                      className="h-8 w-8 text-xs font-semibold"
+                      onClick={() => table.setPageIndex(pageNumber)}
+                    >
+                      {pageNumber + 1}
+                    </Button>
+                  );
+                },
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs px-2"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                Next
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

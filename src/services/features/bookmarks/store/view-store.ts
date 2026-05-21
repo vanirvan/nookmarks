@@ -1,8 +1,8 @@
 import { create } from "zustand";
 
 interface ViewState {
-  view: "grid" | "list";
-  setView: (view: "grid" | "list") => void;
+  view: "grid" | "list" | "table";
+  setView: (view: "grid" | "list" | "table") => void;
   search: string;
   setSearch: (search: string) => void;
   sortBy: "newest" | "oldest" | "a-z" | "z-a";

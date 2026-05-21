@@ -7,6 +7,7 @@ import {
   ListFilter,
   Plus,
   Search,
+  Table,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -60,7 +61,7 @@ export function PageHeader({
       </div>
 
       <div className="flex items-center gap-3">
-        <InputGroup className="flex-1 md:w-auto md:flex-none md:w-[200px] lg:w-[300px]">
+        <InputGroup className="flex-1 md:w-auto md:flex-none lg:w-[300px]">
           <InputGroupAddon>
             <Search className="h-4 w-4" />
           </InputGroupAddon>
@@ -100,7 +101,9 @@ export function PageHeader({
             ].map((option) => (
               <DropdownMenuItem
                 key={option.id}
-                onClick={() => setSortBy(option.id as any)}
+                onClick={() =>
+                  setSortBy(option.id as "newest" | "oldest" | "a-z" | "z-a")
+                }
                 className="flex items-center justify-between"
               >
                 {option.label}
@@ -132,6 +135,17 @@ export function PageHeader({
             onClick={() => setView("list")}
           >
             <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className={cn(
+              "h-7 w-7",
+              view === "table" && "bg-background shadow-xs",
+            )}
+            onClick={() => setView("table")}
+          >
+            <Table className="h-4 w-4" />
           </Button>
         </div>
       </div>

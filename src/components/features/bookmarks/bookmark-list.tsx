@@ -7,6 +7,7 @@ import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks"
 import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
 import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 import { BookmarkCard } from "./bookmark-card";
+import { BookmarkTable } from "./bookmark-table";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 
 interface BookmarkListProps {
@@ -120,6 +121,15 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <p className="text-muted-foreground">No bookmarks found.</p>
       </div>
+    );
+  }
+
+  if (view === "table") {
+    return (
+      <>
+        <BookmarkTable bookmarks={filteredAndSortedBookmarks} />
+        <BulkActionsToolbar />
+      </>
     );
   }
 
