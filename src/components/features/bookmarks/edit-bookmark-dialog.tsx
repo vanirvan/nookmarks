@@ -1,7 +1,8 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Bookmark as BookmarkIcon, Loader2 } from "lucide-react";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -68,6 +69,7 @@ export function EditBookmarkDialog({
   const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
   const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
   const [duplicates, setDuplicates] = useState<Bookmark[]>([]);
+  const [faviconError, setFaviconError] = useState(false);
   const { data: tags } = useTags();
   const { data: collections } = useCollections();
   const { mutate } = useBookmarks();
@@ -100,76 +102,63 @@ export function EditBookmarkDialog({
       forceRefetchImage: false,
     });
     setDuplicates([]);
+    setFaviconError(false);
   }, [bookmark, form]);
 
   useEffect(() => {
-    const subscription = form.watch(async (value, { name }) => {
-      if (name === "url" && value.url && value.url.length > 10) {
+    let timeoutId: NodeJS.Timeout | null = null;
+
+    const subscription = form.watch((value, { name }) => {
+      if (name === "url") {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
+
         const urlValue = value.url;
-
-        const timeoutId = setTimeout(async () => {
-          setIsCheckingDuplicate(true);
-          try {
-            const result = await checkDuplicateUrl({
-              url: urlValue,
-              excludeId: bookmark.id,
-            });
-            if (result.success) {
-              setDuplicates(result.data || []);
-            }
-          } catch (error) {
-            console.error("Duplicate check error:", error);
-          } finally {
-            setIsCheckingDuplicate(false);
-          }
-
-          setIsFetchingMetadata(true);
-          try {
-            const result = await fetchUrlMetadata({ url: urlValue });
-            if (result.success && result.data) {
-              if (result.data.title && !form.getValues("description")) {
-                form.setValue("description", result.data.title);
+        if (urlValue && urlValue.length > 10) {
+          timeoutId = setTimeout(async () => {
+            setIsCheckingDuplicate(true);
+            try {
+              const result = await checkDuplicateUrl({
+                url: urlValue,
+                excludeId: bookmark.id,
+              });
+              if (result.success) {
+                setDuplicates(result.data || []);
               }
+            } catch (error) {
+              console.error("Duplicate check error:", error);
+            } finally {
+              setIsCheckingDuplicate(false);
             }
-          } catch (error) {
-            console.error("Metadata fetch error:", error);
-          } finally {
-            setIsFetchingMetadata(false);
-          }
-        }, 800);
 
-        return () => clearTimeout(timeoutId);
-      } else if (name === "url" && (!value.url || value.url.length <= 10)) {
-        setDuplicates([]);
+            setIsFetchingMetadata(true);
+            try {
+              const result = await fetchUrlMetadata({ url: urlValue });
+              if (result.success && result.data) {
+                if (result.data.title && !form.getValues("description")) {
+                  form.setValue("description", result.data.title);
+                }
+              }
+            } catch (error) {
+              console.error("Metadata fetch error:", error);
+            } finally {
+              setIsFetchingMetadata(false);
+            }
+          }, 800);
+        } else {
+          setDuplicates([]);
+        }
       }
     });
-    return () => subscription.unsubscribe();
-  }, [form, bookmark.id]);
 
-  const handleFetchMetadata = async () => {
-    const url = form.getValues("url");
-    if (!url) {
-      toast.error("Please enter a URL first");
-      return;
-    }
-
-    setIsFetchingMetadata(true);
-    try {
-      const result = await fetchUrlMetadata({ url });
-      if (result.success) {
-        if (result.data.title) {
-          form.setValue("description", result.data.title);
-        }
-        toast.success("Metadata fetched successfully");
-      } else {
-        toast.error(result.error || "Failed to fetch metadata");
+    return () => {
+      subscription.unsubscribe();
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
-    } catch {
-      toast.error("An error occurred");
-    } finally {
-      setIsFetchingMetadata(false);
-    }
-  };
+    };
+  }, [form, bookmark.id]);
 
   const onSubmit = async (data: z.infer<typeof schema>) => {
     if (duplicates.length > 0) {
@@ -195,6 +184,14 @@ export function EditBookmarkDialog({
   };
 
   const hasDuplicates = duplicates.length > 0;
+  const urlValue = form.watch("url");
+
+  let domain = "";
+  try {
+    if (urlValue) {
+      domain = new URL(urlValue).hostname;
+    }
+  } catch {}
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -210,28 +207,33 @@ export function EditBookmarkDialog({
             <>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="url">URL</Label>
-                <div className="flex gap-2">
+                <div className="relative">
                   <Input
                     id="url"
                     type="url"
                     placeholder="https://example.com"
                     {...form.register("url")}
+                    className="pr-10"
                   />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleFetchMetadata}
-                    disabled={isFetchingMetadata}
-                  >
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
                     {isFetchingMetadata ? (
-                      <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                    ) : (
-                      <Download className="h-4 w-4 shrink-0" />
-                    )}
-                    <span className="hidden sm:inline">
-                      {isFetchingMetadata ? "Fetching..." : "Fetch"}
-                    </span>
-                  </Button>
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    ) : domain ? (
+                      !faviconError ? (
+                        <Image
+                          src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                          alt=""
+                          width={16}
+                          height={16}
+                          unoptimized
+                          className="h-4 w-4"
+                          onError={() => setFaviconError(true)}
+                        />
+                      ) : (
+                        <BookmarkIcon className="h-4 w-4 text-muted-foreground" />
+                      )
+                    ) : null}
+                  </div>
                 </div>
                 {form.formState.errors.url && (
                   <p className="text-xs text-destructive">

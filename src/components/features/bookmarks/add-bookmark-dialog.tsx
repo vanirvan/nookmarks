@@ -1,7 +1,7 @@
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
-import { AlertTriangle, Bookmark, Download, Loader2 } from "lucide-react";
+import { AlertTriangle, Bookmark, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -125,31 +125,6 @@ export function AddBookmarkDialog({
     };
   }, [form]);
 
-  const handleFetchMetadata = async () => {
-    const url = form.getValues("url");
-    if (!url) {
-      toast.error("Please enter a URL first");
-      return;
-    }
-
-    setIsFetchingMetadata(true);
-    try {
-      const result = await fetchUrlMetadata({ url });
-      if (result.success) {
-        if (result.data?.title) {
-          form.setValue("description", result.data.title);
-        }
-        toast.success("Metadata fetched successfully");
-      } else {
-        toast.error(result.error || "Failed to fetch metadata");
-      }
-    } catch {
-      toast.error("An error occurred");
-    } finally {
-      setIsFetchingMetadata(false);
-    }
-  };
-
   const onSubmit = async (data: z.infer<typeof schema>) => {
     if (duplicates.length > 0) {
       toast.error("Cannot save: duplicate URL detected");
@@ -195,48 +170,33 @@ export function AddBookmarkDialog({
         >
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="url">URL</Label>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Input
-                  id="url"
-                  type="url"
-                  placeholder="https://example.com"
-                  {...form.register("url")}
-                  className="pr-10"
-                />
-                {domain && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    {!faviconError ? (
-                      <Image
-                        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
-                        alt=""
-                        width={16}
-                        height={16}
-                        unoptimized
-                        className="h-4 w-4"
-                        onError={() => setFaviconError(true)}
-                      />
-                    ) : (
-                      <Bookmark className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </div>
-                )}
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleFetchMetadata}
-                disabled={isFetchingMetadata}
-              >
+            <div className="relative">
+              <Input
+                id="url"
+                type="url"
+                placeholder="https://example.com"
+                {...form.register("url")}
+                className="pr-10"
+              />
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
                 {isFetchingMetadata ? (
-                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                ) : (
-                  <Download className="h-4 w-4 shrink-0" />
-                )}
-                <span className="hidden sm:inline">
-                  {isFetchingMetadata ? "Fetching..." : "Fetch"}
-                </span>
-              </Button>
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                ) : domain ? (
+                  !faviconError ? (
+                    <Image
+                      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                      alt=""
+                      width={16}
+                      height={16}
+                      unoptimized
+                      className="h-4 w-4"
+                      onError={() => setFaviconError(true)}
+                    />
+                  ) : (
+                    <Bookmark className="h-4 w-4 text-muted-foreground" />
+                  )
+                ) : null}
+              </div>
             </div>
             {form.formState.errors.url && (
               <p className="text-xs text-destructive mt-1">

@@ -62,10 +62,18 @@ interface BookmarkCardProps {
 export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [faviconError, setFaviconError] = useState(false);
   const isImage = bookmark.type === "image";
   const imageUrl =
     isImage && bookmark.imagePath ? getFileUrl(bookmark.imagePath) : null;
   const tags = bookmark.bookmarkTags || [];
+
+  let domain = "";
+  try {
+    if (bookmark.url) {
+      domain = new URL(bookmark.url).hostname;
+    }
+  } catch {}
 
   if (view === "list") {
     return (
@@ -91,8 +99,20 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
             />
           </button>
         ) : (
-          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <ExternalLink className="h-5 w-5 text-primary" />
+          <div className="h-12 w-12 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden border">
+            {domain && !faviconError ? (
+              <Image
+                src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+                alt=""
+                width={24}
+                height={24}
+                unoptimized
+                className="h-6 w-6 object-contain"
+                onError={() => setFaviconError(true)}
+              />
+            ) : (
+              <ExternalLink className="h-5 w-5 text-primary" />
+            )}
           </div>
         )}
 
@@ -189,8 +209,22 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
             </div>
           </button>
         ) : (
-          <div className="aspect-4/3 bg-primary/5 flex items-center justify-center relative overflow-hidden">
-            <ExternalLink className="h-10 w-10 text-primary/10 transition-transform duration-300 group-hover:scale-110" />
+          <div className="aspect-4/3 bg-primary/5 flex items-center justify-center relative overflow-hidden border-b">
+            {domain && !faviconError ? (
+              <div className="h-16 w-16 rounded-2xl bg-background border flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-105">
+                <Image
+                  src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
+                  alt=""
+                  width={32}
+                  height={32}
+                  unoptimized
+                  className="h-8 w-8 object-contain"
+                  onError={() => setFaviconError(true)}
+                />
+              </div>
+            ) : (
+              <ExternalLink className="h-10 w-10 text-primary/20 transition-transform duration-300 group-hover:scale-110" />
+            )}
             {bookmark.url && (
               <a
                 href={bookmark.url}
