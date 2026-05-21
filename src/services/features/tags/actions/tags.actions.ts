@@ -1,8 +1,8 @@
 "use server";
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bookmarkTags, tags } from "@/lib/db/schema";
+import { bookmarkTags, tags, bookmarks } from "@/lib/db/schema";
 import { createSafeAction } from "@/lib/safe-action";
 import {
   createTagSchema,
@@ -30,7 +30,7 @@ type TagWithPaths = Tag & {
 export const getTags = createSafeAction(null, async (_, session) => {
   const allTags = await db.query.tags.findMany({
     where: eq(tags.userId, session.user.id),
-    orderBy: [tags.pinned, tags.title],
+    orderBy: [desc(tags.pinned), tags.title],
   });
 
   const tagsWithPaths = computeTagPaths(allTags);
@@ -98,10 +98,75 @@ export const updateTag = createSafeAction(
       throw new Error("Tag not found");
     }
 
+    if (updates.parent !== undefined) {
+      const descendants = await getDescendantTags(tagId, session.user.id);
+      const descendantIds = descendants.map((d) => d.id);
+
+      if (updates.parent && descendantIds.includes(updates.parent)) {
+        throw new Error("Cannot move tag to its own descendant");
+      }
+    }
+
     const [updatedTag] = await db
       .update(tags)
       .set({
         ...updates,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(tags.id, tagId))
+      .returning();
+
+    return updatedTag;
+  },
+);
+
+export const toggleTagPin = createSafeAction(
+  deleteTagSchema,
+  async (validatedData, session) => {
+    const { tagId } = validatedData;
+
+    const existingTag = await db.query.tags.findFirst({
+      where: and(eq(tags.id, tagId), eq(tags.userId, session.user.id)),
+    });
+
+    if (!existingTag) {
+      throw new Error("Tag not found");
+    }
+
+    const [updatedTag] = await db
+      .update(tags)
+      .set({
+        pinned: !existingTag.pinned,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(tags.id, tagId))
+      .returning();
+
+    return updatedTag;
+  },
+);
+
+export const updateTagColor = createSafeAction(
+  updateTagSchema,
+  async (validatedData, session) => {
+    const { tagId, color } = validatedData;
+
+    if (!color) {
+      throw new Error("Color is required");
+    }
+
+    const existingTag = await db.query.tags.findFirst({
+      where: and(eq(tags.id, tagId), eq(tags.userId, session.user.id)),
+    });
+
+    if (!existingTag) {
+      throw new Error("Tag not found");
+    }
+
+    const [updatedTag] = await db
+      .update(tags)
+      .set({
+        color,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(tags.id, tagId))
@@ -134,6 +199,45 @@ export const deleteTag = createSafeAction(
     await db.delete(tags).where(sql`${tags.id} = ANY(${allTagIds})`);
 
     return { success: true };
+  },
+);
+
+export const getTagItemCounts = createSafeAction(
+  null,
+  async (_, session) => {
+    const allTags = await db.query.tags.findMany({
+      where: eq(tags.userId, session.user.id),
+    });
+
+    const allBookmarks = await db.query.bookmarks.findMany({
+      where: eq(bookmarks.userId, session.user.id),
+      with: {
+        bookmarkTags: true,
+      },
+    });
+
+    const tagsWithPaths = computeTagPaths(allTags);
+    const counts: Record<string, number> = {};
+
+    for (const tag of tagsWithPaths) {
+      const descendantTags = tagsWithPaths.filter(
+        (t) =>
+          t.fullPathIDs === tag.fullPathIDs ||
+          t.fullPathIDs.startsWith(tag.fullPathIDs + "/"),
+      );
+      const tagIdsToCount = descendantTags.map((t) => t.id);
+
+      const uniqueBookmarks = new Set<string>();
+      for (const bookmark of allBookmarks) {
+        if (bookmark.bookmarkTags.some((bt) => tagIdsToCount.includes(bt.tagId))) {
+          uniqueBookmarks.add(bookmark.id);
+        }
+      }
+
+      counts[tag.id] = uniqueBookmarks.size;
+    }
+
+    return counts;
   },
 );
 
