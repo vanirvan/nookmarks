@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getFileUrl } from "@/lib/server/s3.server";
 import { cn } from "@/lib/utils";
+import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
 import { DeleteBookmarkDialog } from "./delete-bookmark-dialog";
 import { EditBookmarkDialog } from "./edit-bookmark-dialog";
 import { ImageDialog } from "./image-dialog";
@@ -61,18 +62,12 @@ type Bookmark = {
 interface BookmarkCardProps {
   bookmark: Bookmark;
   view: "grid" | "list";
-  isSelected?: boolean;
-  isSelectMode?: boolean;
-  onSelect?: (id: string, checked: boolean) => void;
 }
 
-export function BookmarkCard({
-  bookmark,
-  view,
-  isSelected = false,
-  isSelectMode = false,
-  onSelect,
-}: BookmarkCardProps) {
+export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
+  const { selectedIds, toggleSelection } = useSelectionStore();
+  const isSelected = selectedIds.includes(bookmark.id);
+  const isSelectMode = selectedIds.length > 0;
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -118,7 +113,7 @@ export function BookmarkCard({
         >
           <Checkbox
             checked={isSelected}
-            onCheckedChange={(checked) => onSelect?.(bookmark.id, !!checked)}
+            onCheckedChange={() => toggleSelection(bookmark.id)}
           />
         </div>
         {isLoadingMetadata && (
@@ -269,7 +264,7 @@ export function BookmarkCard({
         <div className="bg-background/90 backdrop-blur-xs border shadow-xs rounded-md p-1.5 flex items-center justify-center">
           <Checkbox
             checked={isSelected}
-            onCheckedChange={(checked) => onSelect?.(bookmark.id, !!checked)}
+            onCheckedChange={() => toggleSelection(bookmark.id)}
           />
         </div>
       </div>

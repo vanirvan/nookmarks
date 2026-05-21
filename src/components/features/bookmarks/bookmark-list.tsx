@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks";
+import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
 import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 import { BookmarkCard } from "./bookmark-card";
 import { BulkActionsToolbar } from "./bulk-actions-toolbar";
@@ -25,7 +27,8 @@ const SKELETON_KEYS = [
 export function BookmarkList({ collectionId }: BookmarkListProps) {
   const { data: bookmarks, isLoading } = useBookmarks(collectionId);
   const { view, search, sortBy } = useViewStore();
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const { selectedIds, selectAll, clearSelection, setSelectedIds } =
+    useSelectionStore();
 
   const filteredAndSortedBookmarks = useMemo(() => {
     if (!bookmarks) return [];
@@ -71,27 +74,25 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
     return filtered;
   }, [bookmarks, search, sortBy]);
 
-  // Keep selection synchronized with current visible bookmarks
+  const visibleIds = useMemo(
+    () => filteredAndSortedBookmarks.map((b) => b.id),
+    [filteredAndSortedBookmarks],
+  );
+
+  // Prune selection when visible bookmarks change (filter/search)
   useEffect(() => {
-    setSelectedIds((prev) => {
-      const activeIds = new Set(filteredAndSortedBookmarks.map((b) => b.id));
-      const updated = prev.filter((id) => activeIds.has(id));
-      if (updated.length !== prev.length) {
-        return updated;
-      }
-      return prev;
-    });
-  }, [filteredAndSortedBookmarks]);
+    const activeIds = new Set(visibleIds);
+    const pruned = selectedIds.filter((id) => activeIds.has(id));
+    if (pruned.length !== selectedIds.length) {
+      setSelectedIds(pruned);
+    }
+  }, [visibleIds, selectedIds, setSelectedIds]);
 
-  const handleSelect = (id: string, checked: boolean) => {
-    setSelectedIds((prev) =>
-      checked ? [...prev, id] : prev.filter((item) => item !== id),
-    );
-  };
-
-  const handleClearSelection = () => {
-    setSelectedIds([]);
-  };
+  // Select All checkbox state derivation
+  const allVisibleSelected =
+    visibleIds.length > 0 && visibleIds.every((id) => selectedIds.includes(id));
+  const someVisibleSelected =
+    !allVisibleSelected && visibleIds.some((id) => selectedIds.includes(id));
 
   if (isLoading) {
     return (
@@ -124,6 +125,39 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
 
   return (
     <>
+      {/* Select All bar — only show if there are bookmarks */}
+      <div className="flex items-center gap-3 mb-3 px-1">
+        <button
+          type="button"
+          className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          onClick={() => selectAll(visibleIds)}
+        >
+          <Checkbox
+            checked={allVisibleSelected}
+            indeterminate={someVisibleSelected}
+            onClick={(e) => e.stopPropagation()}
+            onCheckedChange={() => selectAll(visibleIds)}
+          />
+          <span>
+            {allVisibleSelected
+              ? "Deselect all"
+              : someVisibleSelected
+                ? `${selectedIds.filter((id) => visibleIds.includes(id)).length} of ${visibleIds.length} selected`
+                : "Select all"}
+          </span>
+        </button>
+
+        {selectedIds.length > 0 && (
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="text-xs text-muted-foreground hover:text-destructive transition-colors ml-auto"
+          >
+            Clear
+          </button>
+        )}
+      </div>
+
       <div
         className={
           view === "grid"
@@ -132,21 +166,11 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
         }
       >
         {filteredAndSortedBookmarks.map((bookmark) => (
-          <BookmarkCard
-            key={bookmark.id}
-            bookmark={bookmark}
-            view={view}
-            isSelected={selectedIds.includes(bookmark.id)}
-            isSelectMode={selectedIds.length > 0}
-            onSelect={handleSelect}
-          />
+          <BookmarkCard key={bookmark.id} bookmark={bookmark} view={view} />
         ))}
       </div>
 
-      <BulkActionsToolbar
-        selectedIds={selectedIds}
-        onClearSelection={handleClearSelection}
-      />
+      <BulkActionsToolbar />
     </>
   );
 }

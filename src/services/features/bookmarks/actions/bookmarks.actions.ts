@@ -945,3 +945,76 @@ export const bulkAddTagsToBookmarks = createSafeAction(
     });
   },
 );
+
+export const bulkUpdateTags = createSafeAction(
+  z.object({
+    bookmarkIds: z.array(z.string().uuid()).min(1),
+    tagsToAdd: z.array(z.string().uuid()).default([]),
+    tagsToRemove: z.array(z.string().uuid()).default([]),
+  }),
+  async (validatedData, session) => {
+    const { bookmarkIds, tagsToAdd, tagsToRemove } = validatedData;
+
+    return await db.transaction(async (tx) => {
+      // Verify ownership of bookmarks
+      const targetBookmarks = await tx.query.bookmarks.findMany({
+        where: and(
+          eq(bookmarks.userId, session.user.id),
+          sql`${bookmarks.id} IN ${bookmarkIds}`,
+        ),
+      });
+
+      if (targetBookmarks.length === 0) {
+        throw new Error("No bookmarks found");
+      }
+
+      const verifiedIds = targetBookmarks.map((b) => b.id);
+
+      // Remove tags from all selected bookmarks
+      if (tagsToRemove.length > 0) {
+        for (const bId of verifiedIds) {
+          await tx
+            .delete(bookmarkTags)
+            .where(
+              and(
+                eq(bookmarkTags.bookmarkId, bId),
+                sql`${bookmarkTags.tagId} IN ${tagsToRemove}`,
+              ),
+            );
+        }
+      }
+
+      // Add tags to all selected bookmarks (ignore existing)
+      if (tagsToAdd.length > 0) {
+        for (const bId of verifiedIds) {
+          for (const tId of tagsToAdd) {
+            const existing = await tx.query.bookmarkTags.findFirst({
+              where: and(
+                eq(bookmarkTags.bookmarkId, bId),
+                eq(bookmarkTags.tagId, tId),
+              ),
+            });
+            if (!existing) {
+              await tx.insert(bookmarkTags).values({
+                bookmarkId: bId,
+                tagId: tId,
+              });
+            }
+          }
+        }
+      }
+
+      // Update timestamps
+      await tx
+        .update(bookmarks)
+        .set({ updatedAt: new Date().toISOString() })
+        .where(sql`${bookmarks.id} IN ${verifiedIds}`);
+
+      return {
+        updated: verifiedIds.length,
+        tagsAdded: tagsToAdd.length,
+        tagsRemoved: tagsToRemove.length,
+      };
+    });
+  },
+);
