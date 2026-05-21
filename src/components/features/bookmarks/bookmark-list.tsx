@@ -1,18 +1,31 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks";
 import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 import { BookmarkCard } from "./bookmark-card";
+import { BulkActionsToolbar } from "./bulk-actions-toolbar";
 
 interface BookmarkListProps {
   collectionId?: string | null;
 }
 
+const SKELETON_KEYS = [
+  "sk-1",
+  "sk-2",
+  "sk-3",
+  "sk-4",
+  "sk-5",
+  "sk-6",
+  "sk-7",
+  "sk-8",
+];
+
 export function BookmarkList({ collectionId }: BookmarkListProps) {
   const { data: bookmarks, isLoading } = useBookmarks(collectionId);
   const { view, search, sortBy } = useViewStore();
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const filteredAndSortedBookmarks = useMemo(() => {
     if (!bookmarks) return [];
@@ -58,6 +71,28 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
     return filtered;
   }, [bookmarks, search, sortBy]);
 
+  // Keep selection synchronized with current visible bookmarks
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const activeIds = new Set(filteredAndSortedBookmarks.map((b) => b.id));
+      const updated = prev.filter((id) => activeIds.has(id));
+      if (updated.length !== prev.length) {
+        return updated;
+      }
+      return prev;
+    });
+  }, [filteredAndSortedBookmarks]);
+
+  const handleSelect = (id: string, checked: boolean) => {
+    setSelectedIds((prev) =>
+      checked ? [...prev, id] : prev.filter((item) => item !== id),
+    );
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+  };
+
   if (isLoading) {
     return (
       <div
@@ -67,9 +102,9 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
             : "flex flex-col gap-3"
         }
       >
-        {Array.from({ length: 8 }).map((_, i) => (
+        {SKELETON_KEYS.map((key) => (
           <Skeleton
-            key={i}
+            key={key}
             className={
               view === "grid" ? "aspect-video rounded-xl" : "h-20 rounded-xl"
             }
@@ -88,16 +123,30 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
   }
 
   return (
-    <div
-      className={
-        view === "grid"
-          ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
-          : "flex flex-col gap-3"
-      }
-    >
-      {filteredAndSortedBookmarks.map((bookmark) => (
-        <BookmarkCard key={bookmark.id} bookmark={bookmark} view={view} />
-      ))}
-    </div>
+    <>
+      <div
+        className={
+          view === "grid"
+            ? "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"
+            : "flex flex-col gap-3"
+        }
+      >
+        {filteredAndSortedBookmarks.map((bookmark) => (
+          <BookmarkCard
+            key={bookmark.id}
+            bookmark={bookmark}
+            view={view}
+            isSelected={selectedIds.includes(bookmark.id)}
+            isSelectMode={selectedIds.length > 0}
+            onSelect={handleSelect}
+          />
+        ))}
+      </div>
+
+      <BulkActionsToolbar
+        selectedIds={selectedIds}
+        onClearSelection={handleClearSelection}
+      />
+    </>
   );
 }

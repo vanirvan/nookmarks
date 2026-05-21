@@ -35,8 +35,11 @@ export function DeleteCollectionDialog({
       const response = await deleteCollection({ id: collection.id });
 
       if (response.success) {
-        // Revalidate collections cache
+        // Revalidate collections, bookmarks, and counts
         mutate("collections");
+        mutate((key) => Array.isArray(key) && key[0] === "bookmarks");
+        mutate("unsorted-bookmarks-count");
+        mutate("all-bookmarks-count");
         onOpenChange(false);
       } else {
         alert(response.error);

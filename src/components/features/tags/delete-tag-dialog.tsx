@@ -3,6 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,7 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { deleteTag } from "@/services/features/tags/actions/tags.actions";
-import { useTags } from "@/services/features/tags/hooks/use-tags";
 
 interface DeleteTagDialogProps {
   open: boolean;
@@ -32,7 +32,7 @@ export function DeleteTagDialog({
   hasChildren,
 }: DeleteTagDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
-  const { mutate } = useTags();
+  const { mutate } = useSWRConfig();
 
   const handleDelete = async () => {
     setIsLoading(true);
@@ -40,7 +40,10 @@ export function DeleteTagDialog({
       const result = await deleteTag({ tagId: tag.id });
       if (result.success) {
         toast.success("Tag deleted successfully");
-        mutate();
+        mutate("tags");
+        mutate((key) => Array.isArray(key) && key[0] === "bookmarks");
+        mutate("untagged-bookmarks-count");
+        mutate("tag-item-counts");
         onOpenChange(false);
       } else {
         toast.error(result.error || "Failed to delete tag");

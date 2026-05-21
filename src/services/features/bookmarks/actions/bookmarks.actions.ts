@@ -1,6 +1,8 @@
 "use server";
 
+import * as cheerio from "cheerio";
 import { and, eq, notExists, sql } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/lib/db";
 import {
   bookmarkCollections,
@@ -13,14 +15,13 @@ import {
 import { createSafeAction } from "@/lib/safe-action";
 import { deleteFile } from "@/lib/server/s3.server";
 import {
+  checkDuplicateUrlSchema,
   createBookmarkSchema,
   deleteBookmarkSchema,
-  updateBookmarkSchema,
   fetchUrlMetadataSchema,
-  checkDuplicateUrlSchema,
+  updateBookmarkSchema,
 } from "@/lib/validations/bookmarks";
 import { createNestedTags } from "@/services/features/tags/actions/tags.actions";
-import * as cheerio from "cheerio";
 
 export const createBookmark = createSafeAction(
   createBookmarkSchema,
@@ -98,21 +99,18 @@ export const createBookmark = createSafeAction(
             extractedTitle: "",
             extractedDescription: "",
             favicon: "",
+            ogImage: "",
           },
         })
         .returning();
 
       if (validatedData.type === "bookmark" && validatedData.url) {
-        // TODO: Add backend fetch to process bookmark
-        // fetch("", {
-        //   method: "POST",
-        //   headers: { "Content-Type": "application/json" },
-        //   body: JSON.stringify({
-        //     bookmarkId: newBookmark.id,
-        //     url: validatedData.url,
-        //     needsAI: needsAI,
-        //   }),
-        // }).catch((err) => console.error("Failed pinging Backend:", err));
+        // Auto-fetch metadata for URL bookmarks (fire and forget)
+        void fetchAndUpdateBookmarkMetadata({
+          bookmarkId: newBookmark.id,
+        }).catch((err) => {
+          console.error("Failed to fetch metadata:", err);
+        });
       }
 
       if (validatedData.tags && validatedData.tags.length > 0) {
@@ -152,7 +150,10 @@ export const createBookmark = createSafeAction(
         );
       }
 
-      return { ...newBookmark, aiMetadata: {} };
+      return {
+        ...newBookmark,
+        aiMetadata: (newBookmark.aiMetadata as Record<string, unknown>) || {},
+      };
     });
   },
 );
@@ -247,12 +248,17 @@ export const getBookmarks = createSafeAction(
         const descendantTagIds = allTags
           .filter((t) => {
             const pathIDs = computeTagPathsIDs(t.id).join("/");
-            return pathIDs === selectedPathIDs || pathIDs.startsWith(selectedPathIDs + "/");
+            return (
+              pathIDs === selectedPathIDs ||
+              pathIDs.startsWith(`${selectedPathIDs}/`)
+            );
           })
           .map((t) => t.id);
 
         filtered = result.filter((bookmark) =>
-          bookmark.bookmarkTags.some((bt) => descendantTagIds.includes(bt.tagId)),
+          bookmark.bookmarkTags.some((bt) =>
+            descendantTagIds.includes(bt.tagId),
+          ),
         );
       } else {
         filtered = result.filter((bookmark) =>
@@ -263,7 +269,7 @@ export const getBookmarks = createSafeAction(
 
     return filtered.map((item) => ({
       ...item,
-      aiMetadata: {},
+      aiMetadata: (item.aiMetadata as Record<string, unknown>) || {},
     }));
   },
 );
@@ -465,7 +471,11 @@ export const updateBookmark = createSafeAction(
         await deleteFile(existingBookmark.imagePath);
       }
 
-      return { ...updatedBookmark, aiMetadata: {} };
+      return {
+        ...updatedBookmark,
+        aiMetadata:
+          (updatedBookmark.aiMetadata as Record<string, unknown>) || {},
+      };
     });
   },
 );
@@ -535,9 +545,36 @@ export const getUntaggedBookmarksCount = createSafeAction(
   },
 );
 
+// Helper: Resolve relative URLs to absolute
+function resolveUrl(url: string, base: URL): string {
+  if (!url) return "";
+
+  try {
+    // Already absolute
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      return url;
+    }
+
+    // Protocol-relative
+    if (url.startsWith("//")) {
+      return `${base.protocol}${url}`;
+    }
+
+    // Absolute path
+    if (url.startsWith("/")) {
+      return `${base.origin}${url}`;
+    }
+
+    // Relative path (without slash)
+    return `${base.origin}/${url}`;
+  } catch {
+    return "";
+  }
+}
+
 export const fetchUrlMetadata = createSafeAction(
   fetchUrlMetadataSchema,
-  async (validatedData, session) => {
+  async (validatedData) => {
     const { url } = validatedData;
 
     try {
@@ -547,7 +584,11 @@ export const fetchUrlMetadata = createSafeAction(
       const response = await fetch(url, {
         signal: controller.signal,
         headers: {
-          "User-Agent": "Mozilla/5.0 (compatible; Nookmarks/1.0)",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          Accept:
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+          "Accept-Language": "en-US,en;q=0.5",
         },
         redirect: "follow",
       });
@@ -555,43 +596,69 @@ export const fetchUrlMetadata = createSafeAction(
       clearTimeout(timeoutId);
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const html = await response.text();
       const $ = cheerio.load(html);
+      const baseUrl = new URL(url);
 
-      const title =
-        $('meta[property="og:title"]').attr("content") ||
-        $("title").text() ||
-        new URL(url).hostname;
+      // Extract title with priority
+      const ogTitle = $('meta[property="og:title"]').attr("content");
+      const twitterTitle = $('meta[name="twitter:title"]').attr("content");
+      const titleTag = $("title").text();
+      const h1Tag = $("h1").first().text();
 
-      const description =
-        $('meta[property="og:description"]').attr("content") ||
-        $('meta[name="description"]').attr("content") ||
-        "";
+      const extractedTitle = (
+        ogTitle ||
+        twitterTitle ||
+        titleTag ||
+        h1Tag ||
+        baseUrl.hostname
+      ).trim();
 
-      let image =
-        $('meta[property="og:image"]').attr("content") ||
-        $('meta[name="twitter:image"]').attr("content") ||
-        $("img").first().attr("src") ||
-        "";
+      // Extract description with priority
+      const ogDescription = $('meta[property="og:description"]').attr(
+        "content",
+      );
+      const twitterDescription = $('meta[name="twitter:description"]').attr(
+        "content",
+      );
+      const metaDescription = $('meta[name="description"]').attr("content");
 
-      if (image && !image.startsWith("http")) {
-        const baseUrl = new URL(url);
-        if (image.startsWith("//")) {
-          image = `https:${image}`;
-        } else if (image.startsWith("/")) {
-          image = `${baseUrl.origin}${image}`;
-        } else {
-          image = `${baseUrl.origin}/${image}`;
-        }
+      const extractedDescription = (
+        ogDescription ||
+        twitterDescription ||
+        metaDescription ||
+        ""
+      ).trim();
+
+      // Extract image with priority
+      const ogImage = $('meta[property="og:image"]').attr("content");
+      const twitterImage = $('meta[name="twitter:image"]').attr("content");
+      const firstImg = $("img").first().attr("src");
+
+      let imageUrl = ogImage || twitterImage || firstImg || "";
+
+      // Resolve relative image URLs to absolute
+      if (imageUrl) {
+        imageUrl = resolveUrl(imageUrl, baseUrl);
       }
 
+      // Extract favicon
+      let favicon =
+        $('link[rel="icon"]').attr("href") ||
+        $('link[rel="shortcut icon"]').attr("href") ||
+        $('link[rel="apple-touch-icon"]').attr("href") ||
+        "/favicon.ico";
+
+      favicon = resolveUrl(favicon, baseUrl);
+
       return {
-        title: title.trim(),
-        description: description.trim(),
-        image: image.trim(),
+        title: extractedTitle,
+        description: extractedDescription,
+        image: imageUrl,
+        favicon: favicon,
       };
     } catch (error) {
       if ((error as Error).name === "AbortError") {
@@ -599,7 +666,140 @@ export const fetchUrlMetadata = createSafeAction(
       }
       throw new Error(`Failed to fetch metadata: ${(error as Error).message}`);
     }
-  }
+  },
+);
+
+// Helper: Fetch and update bookmark metadata
+export const fetchAndUpdateBookmarkMetadata = createSafeAction(
+  z.object({ bookmarkId: z.string().uuid() }),
+  async (validatedData, session) => {
+    const { bookmarkId } = validatedData;
+
+    // Get bookmark
+    const bookmark = await db.query.bookmarks.findFirst({
+      where: and(
+        eq(bookmarks.id, bookmarkId),
+        eq(bookmarks.userId, session.user.id),
+      ),
+    });
+
+    if (!bookmark || !bookmark.url) {
+      throw new Error("Bookmark not found or has no URL");
+    }
+
+    try {
+      // Set status to pending
+      await db
+        .update(bookmarks)
+        .set({
+          aiStatus: "pending",
+        })
+        .where(eq(bookmarks.id, bookmarkId));
+
+      // Fetch metadata
+      const metadataResult = await fetchUrlMetadata({ url: bookmark.url });
+
+      if (!metadataResult.success) {
+        throw new Error(metadataResult.error || "Failed to fetch metadata");
+      }
+
+      const metadata = metadataResult.data;
+
+      const aiMetadata = {
+        extractedTitle: metadata.title,
+        extractedDescription: metadata.description,
+        favicon: metadata.favicon,
+        ogImage: metadata.image,
+        fetchedAt: new Date().toISOString(),
+      };
+
+      // Update bookmark with metadata and status to completed
+      const [updated] = await db
+        .update(bookmarks)
+        .set({
+          aiStatus: "completed",
+          aiMetadata: aiMetadata,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(bookmarks.id, bookmarkId))
+        .returning();
+
+      return updated;
+    } catch (error) {
+      // Store error in metadata and set status to failed
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      const [updated] = await db
+        .update(bookmarks)
+        .set({
+          aiStatus: "failed",
+          aiError: errorMsg,
+          aiMetadata: {
+            extractedTitle: "",
+            extractedDescription: "",
+            favicon: "",
+            ogImage: "",
+            fetchedAt: new Date().toISOString(),
+            fetchError: errorMsg,
+          },
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(bookmarks.id, bookmarkId))
+        .returning();
+
+      return updated;
+    }
+  },
+);
+
+// Bulk refetch metadata action
+export const bulkRefetchMetadata = createSafeAction(
+  z.object({
+    bookmarkIds: z.array(z.string().uuid()).min(1),
+  }),
+  async (validatedData, session) => {
+    const { bookmarkIds } = validatedData;
+
+    // Verify ownership
+    const bookmarksToRefetch = await db.query.bookmarks.findMany({
+      where: and(
+        eq(bookmarks.userId, session.user.id),
+        sql`${bookmarks.id} IN ${bookmarkIds}`,
+      ),
+    });
+
+    if (bookmarksToRefetch.length === 0) {
+      throw new Error("No bookmarks found");
+    }
+
+    // Fetch metadata for each bookmark (with concurrency limit)
+    const results = [];
+    const concurrency = 5; // Process 5 at a time
+
+    for (let i = 0; i < bookmarksToRefetch.length; i += concurrency) {
+      const batch = bookmarksToRefetch.slice(i, i + concurrency);
+      const batchResults = await Promise.allSettled(
+        batch.map((bookmark) =>
+          fetchAndUpdateBookmarkMetadata({ bookmarkId: bookmark.id }),
+        ),
+      );
+      results.push(...batchResults);
+    }
+
+    const successful = results.filter(
+      (r) => r.status === "fulfilled" && r.value.success,
+    ).length;
+    const failed = results.filter(
+      (r) =>
+        r.status === "rejected" ||
+        (r.status === "fulfilled" && !r.value.success),
+    ).length;
+
+    return {
+      total: bookmarksToRefetch.length,
+      successful,
+      failed,
+    };
+  },
 );
 
 export const checkDuplicateUrl = createSafeAction(
@@ -614,7 +814,7 @@ export const checkDuplicateUrl = createSafeAction(
         and(
           eq(bookmarks.userId, session.user.id),
           sql`LOWER(${bookmarks.url}) = ${normalizedUrl}`,
-          excludeId ? ne(bookmarks.id, excludeId) : undefined
+          excludeId ? ne(bookmarks.id, excludeId) : undefined,
         ),
       with: {
         bookmarkTags: {
@@ -632,5 +832,116 @@ export const checkDuplicateUrl = createSafeAction(
     });
 
     return duplicates;
-  }
+  },
+);
+
+export const bulkDeleteBookmarks = createSafeAction(
+  z.object({
+    bookmarkIds: z.array(z.string().uuid()).min(1),
+  }),
+  async (validatedData, session) => {
+    const { bookmarkIds } = validatedData;
+
+    return await db.transaction(async (tx) => {
+      // Find the bookmarks to check collection memberships and delete images
+      const targetBookmarks = await tx.query.bookmarks.findMany({
+        where: and(
+          eq(bookmarks.userId, session.user.id),
+          sql`${bookmarks.id} IN ${bookmarkIds}`,
+        ),
+      });
+
+      if (targetBookmarks.length === 0) {
+        throw new Error("No bookmarks found to delete");
+      }
+
+      const verifiedIds = targetBookmarks.map((b) => b.id);
+
+      // Delete bookmarks (cascade deletes tags & collection memberships)
+      await tx
+        .delete(bookmarks)
+        .where(
+          and(
+            eq(bookmarks.userId, session.user.id),
+            sql`${bookmarks.id} IN ${verifiedIds}`,
+          ),
+        );
+
+      // Delete images from R2 if any
+      for (const b of targetBookmarks) {
+        if (b.type === "image" && b.imagePath) {
+          try {
+            await deleteFile(b.imagePath);
+          } catch (err) {
+            console.error(`Failed to delete file ${b.imagePath}:`, err);
+          }
+        }
+      }
+
+      return { success: true, count: verifiedIds.length };
+    });
+  },
+);
+
+export const bulkAddTagsToBookmarks = createSafeAction(
+  z.object({
+    bookmarkIds: z.array(z.string().uuid()).min(1),
+    tagIds: z.array(z.string().uuid()).min(1),
+  }),
+  async (validatedData, session) => {
+    const { bookmarkIds, tagIds } = validatedData;
+
+    return await db.transaction(async (tx) => {
+      // Verify ownership of bookmarks
+      const targetBookmarks = await tx.query.bookmarks.findMany({
+        where: and(
+          eq(bookmarks.userId, session.user.id),
+          sql`${bookmarks.id} IN ${bookmarkIds}`,
+        ),
+      });
+
+      if (targetBookmarks.length === 0) {
+        throw new Error("No bookmarks found");
+      }
+
+      const verifiedBookmarkIds = targetBookmarks.map((b) => b.id);
+
+      // Verify ownership of tags
+      const targetTags = await tx.query.tags.findMany({
+        where: and(
+          eq(tags.userId, session.user.id),
+          sql`${tags.id} IN ${tagIds}`,
+        ),
+      });
+
+      if (targetTags.length === 0) {
+        throw new Error("No tags found");
+      }
+
+      const verifiedTagIds = targetTags.map((t) => t.id);
+
+      // For each bookmark, insert tags that don't already exist
+      let insertedCount = 0;
+      for (const bId of verifiedBookmarkIds) {
+        for (const tId of verifiedTagIds) {
+          const existing = await tx.query.bookmarkTags.findFirst({
+            where: and(
+              eq(bookmarkTags.bookmarkId, bId),
+              eq(bookmarkTags.tagId, tId),
+            ),
+          });
+
+          if (!existing) {
+            await tx.insert(bookmarkTags).values({
+              bookmarkId: bId,
+              tagId: tId,
+            });
+            insertedCount++;
+          }
+        }
+      }
+
+      return { success: true, insertedCount };
+    });
+  },
 );

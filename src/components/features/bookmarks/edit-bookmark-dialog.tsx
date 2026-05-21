@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
+import { useSWRConfig } from "swr";
 import { z } from "zod";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,7 +25,6 @@ import {
   fetchUrlMetadata,
   updateBookmark,
 } from "@/services/features/bookmarks/actions/bookmarks.actions";
-import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks";
 import { useCollections } from "@/services/features/collections/hooks/use-collections";
 import { useTags } from "@/services/features/tags/hooks/use-tags";
 import { TagMultiSelect } from "./tag-multi-select";
@@ -72,7 +72,15 @@ export function EditBookmarkDialog({
   const [faviconError, setFaviconError] = useState(false);
   const { data: tags } = useTags();
   const { data: collections } = useCollections();
-  const { mutate } = useBookmarks();
+  const { mutate } = useSWRConfig();
+
+  const triggerMutate = () => {
+    mutate((key) => Array.isArray(key) && key[0] === "bookmarks");
+    mutate("all-bookmarks-count");
+    mutate("unsorted-bookmarks-count");
+    mutate("untagged-bookmarks-count");
+    mutate("tag-item-counts");
+  };
 
   const form = useForm({
     resolver: zodResolver(schema),
@@ -171,7 +179,7 @@ export function EditBookmarkDialog({
       const result = await updateBookmark(data);
       if (result.success) {
         toast.success("Bookmark updated successfully");
-        mutate();
+        triggerMutate();
         onOpenChange(false);
       } else {
         toast.error(result.error || "Failed to update bookmark");

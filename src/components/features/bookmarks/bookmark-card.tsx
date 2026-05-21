@@ -2,6 +2,7 @@
 
 import {
   ExternalLink,
+  Loader2,
   Maximize2,
   MoreHorizontal,
   Pencil,
@@ -10,6 +11,7 @@ import {
 import Image from "next/image";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +19,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getFileUrl } from "@/lib/server/s3.server";
+import { cn } from "@/lib/utils";
 import { EditBookmarkDialog } from "./edit-bookmark-dialog";
 import { ImageDialog } from "./image-dialog";
 
@@ -57,9 +60,18 @@ type Bookmark = {
 interface BookmarkCardProps {
   bookmark: Bookmark;
   view: "grid" | "list";
+  isSelected?: boolean;
+  isSelectMode?: boolean;
+  onSelect?: (id: string, checked: boolean) => void;
 }
 
-export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
+export function BookmarkCard({
+  bookmark,
+  view,
+  isSelected = false,
+  isSelectMode = false,
+  onSelect,
+}: BookmarkCardProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
@@ -67,6 +79,14 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
   const imageUrl =
     isImage && bookmark.imagePath ? getFileUrl(bookmark.imagePath) : null;
   const tags = bookmark.bookmarkTags || [];
+  const metadata = (bookmark.aiMetadata || {}) as Record<string, string>;
+  const title =
+    metadata.extractedTitle || bookmark.description || bookmark.url || "";
+  const description =
+    metadata.extractedDescription || bookmark.description || "";
+  const favicon = metadata.favicon || "";
+  const ogImage = metadata.ogImage || "";
+  const isLoadingMetadata = bookmark.aiStatus === "pending";
 
   let domain = "";
   try {
@@ -77,7 +97,33 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
 
   if (view === "list") {
     return (
-      <div className="group relative flex items-center gap-4 p-3 rounded-xl border bg-card hover:bg-accent/50 transition-colors h-20">
+      <div
+        className={cn(
+          "group relative flex items-center gap-4 p-3 rounded-xl border hover:bg-accent/50 transition-all duration-200 h-20",
+          isSelected
+            ? "border-primary/50 bg-primary/5 shadow-xs"
+            : "bg-card border-border",
+        )}
+      >
+        {/* Multi-Select Checkbox */}
+        <div
+          className={cn(
+            "shrink-0 flex items-center transition-all duration-200",
+            isSelectMode
+              ? "w-6 opacity-100"
+              : "w-0 opacity-0 group-hover:w-6 group-hover:opacity-100 overflow-hidden",
+          )}
+        >
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) => onSelect?.(bookmark.id, !!checked)}
+          />
+        </div>
+        {isLoadingMetadata && (
+          <div className="absolute top-1.5 right-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-background/85 backdrop-blur-xs border shadow-xs">
+            <Loader2 className="h-3 w-3 animate-spin text-primary" />
+          </div>
+        )}
         {isImage ? (
           <button
             type="button"
@@ -98,9 +144,29 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
               className="object-cover"
             />
           </button>
+        ) : ogImage ? (
+          <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted shrink-0 relative">
+            <Image
+              src={ogImage}
+              alt=""
+              fill
+              unoptimized
+              className="object-cover"
+            />
+          </div>
         ) : (
           <div className="h-12 w-12 rounded-lg bg-primary/5 flex items-center justify-center shrink-0 overflow-hidden border">
-            {domain && !faviconError ? (
+            {favicon && !faviconError ? (
+              <Image
+                src={favicon}
+                alt=""
+                width={24}
+                height={24}
+                unoptimized
+                className="h-6 w-6 object-contain"
+                onError={() => setFaviconError(true)}
+              />
+            ) : domain && !faviconError ? (
               <Image
                 src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
                 alt=""
@@ -118,9 +184,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <h3 className="font-medium truncate leading-none">
-              {bookmark.description || bookmark.url}
-            </h3>
+            <h3 className="font-medium truncate leading-none">{title}</h3>
             {tags.length > 0 && (
               <div className="flex gap-1 overflow-hidden shrink-0">
                 {tags.slice(0, 2).map((tag) => (
@@ -183,7 +247,35 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
   }
 
   return (
-    <div className="group relative grid grid-rows-subgrid rounded-xl border bg-card overflow-hidden hover:shadow-md transition-all row-span-4">
+    <div
+      className={cn(
+        "group relative grid grid-rows-subgrid rounded-xl border overflow-hidden hover:shadow-md transition-all duration-200 row-span-4",
+        isSelected
+          ? "border-primary/50 ring-1 ring-primary/20 bg-primary/5 shadow-sm"
+          : "bg-card border-border",
+      )}
+    >
+      {/* Floating Checkbox for Grid Cards */}
+      <div
+        className={cn(
+          "absolute top-2 left-2 z-20 transition-all duration-200",
+          isSelectMode || isSelected
+            ? "opacity-100 scale-100"
+            : "opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100",
+        )}
+      >
+        <div className="bg-background/90 backdrop-blur-xs border shadow-xs rounded-md p-1.5 flex items-center justify-center">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={(checked) => onSelect?.(bookmark.id, !!checked)}
+          />
+        </div>
+      </div>
+      {isLoadingMetadata && (
+        <div className="absolute top-2 right-2 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-background/85 backdrop-blur-xs border shadow-xs">
+          <Loader2 className="h-3 w-3 animate-spin text-primary" />
+        </div>
+      )}
       <div className="relative">
         {isImage ? (
           <button
@@ -208,9 +300,41 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
               <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           </button>
+        ) : ogImage ? (
+          <div className="aspect-4/3 bg-muted relative overflow-hidden border-b">
+            <Image
+              src={ogImage}
+              alt=""
+              fill
+              unoptimized
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
+            />
+            {bookmark.url && (
+              <a
+                href={bookmark.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute inset-0"
+              >
+                <span className="sr-only">Open {title} in a new tab</span>
+              </a>
+            )}
+          </div>
         ) : (
           <div className="aspect-4/3 bg-primary/5 flex items-center justify-center relative overflow-hidden border-b">
-            {domain && !faviconError ? (
+            {favicon && !faviconError ? (
+              <div className="h-16 w-16 rounded-2xl bg-background border flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-105">
+                <Image
+                  src={favicon}
+                  alt=""
+                  width={32}
+                  height={32}
+                  unoptimized
+                  className="h-8 w-8 object-contain"
+                  onError={() => setFaviconError(true)}
+                />
+              </div>
+            ) : domain && !faviconError ? (
               <div className="h-16 w-16 rounded-2xl bg-background border flex items-center justify-center shadow-sm transition-transform duration-300 group-hover:scale-105">
                 <Image
                   src={`https://www.google.com/s2/favicons?domain=${domain}&sz=128`}
@@ -232,10 +356,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
                 rel="noopener noreferrer"
                 className="absolute inset-0"
               >
-                <span className="sr-only">
-                  Open {bookmark.title || bookmark.description || bookmark.url}{" "}
-                  in a new tab
-                </span>
+                <span className="sr-only">Open {title} in a new tab</span>
               </a>
             )}
           </div>
@@ -243,14 +364,12 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
       </div>
 
       <div className="p-3">
-        <h3 className="font-medium text-sm line-clamp-2">
-          {bookmark.title || bookmark.description || bookmark.url}
-        </h3>
+        <h3 className="font-medium text-sm line-clamp-2">{title}</h3>
       </div>
 
       <div className="px-3">
         <p className="text-xs text-muted-foreground line-clamp-2">
-          {bookmark.description || bookmark.url || "Image Bookmark"}
+          {description || "Image Bookmark"}
         </p>
       </div>
 
