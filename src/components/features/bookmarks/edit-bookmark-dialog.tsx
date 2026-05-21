@@ -1,22 +1,31 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { AlertTriangle, Download, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 import { z } from "zod";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Badge } from "@/components/ui/badge";
-import { Download, AlertTriangle, Loader2 } from "lucide-react";
-import { updateBookmark, fetchUrlMetadata, checkDuplicateUrl } from "@/services/features/bookmarks/actions/bookmarks.actions";
-import { useTags } from "@/services/features/tags/hooks/use-tags";
-import { useCollections } from "@/services/features/collections/hooks/use-collections";
+import {
+  checkDuplicateUrl,
+  fetchUrlMetadata,
+  updateBookmark,
+} from "@/services/features/bookmarks/actions/bookmarks.actions";
 import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks";
-import { toast } from "sonner";
+import { useCollections } from "@/services/features/collections/hooks/use-collections";
+import { useTags } from "@/services/features/tags/hooks/use-tags";
 import { TagMultiSelect } from "./tag-multi-select";
 
 const schema = z.object({
@@ -72,7 +81,8 @@ export function EditBookmarkDialog({
       imagePath: bookmark.imagePath || "",
       description: bookmark.description || "",
       tags: bookmark.bookmarkTags?.map((bt) => bt.tagId) || [],
-      collectionIds: bookmark.bookmarkCollections?.map((bc) => bc.collectionId) || [],
+      collectionIds:
+        bookmark.bookmarkCollections?.map((bc) => bc.collectionId) || [],
       forceRefetchImage: false,
     },
   });
@@ -85,7 +95,8 @@ export function EditBookmarkDialog({
       imagePath: bookmark.imagePath || "",
       description: bookmark.description || "",
       tags: bookmark.bookmarkTags?.map((bt) => bt.tagId) || [],
-      collectionIds: bookmark.bookmarkCollections?.map((bc) => bc.collectionId) || [],
+      collectionIds:
+        bookmark.bookmarkCollections?.map((bc) => bc.collectionId) || [],
       forceRefetchImage: false,
     });
     setDuplicates([]);
@@ -95,7 +106,7 @@ export function EditBookmarkDialog({
     const subscription = form.watch(async (value, { name }) => {
       if (name === "url" && value.url && value.url.length > 10) {
         const urlValue = value.url;
-        
+
         const timeoutId = setTimeout(async () => {
           setIsCheckingDuplicate(true);
           try {
@@ -191,10 +202,13 @@ export function EditBookmarkDialog({
         <DialogHeader>
           <DialogTitle>Edit Bookmark</DialogTitle>
         </DialogHeader>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <form
+          onSubmit={form.handleSubmit(onSubmit)}
+          className="flex flex-col gap-4"
+        >
           {bookmark.type === "bookmark" && (
             <>
-              <div>
+              <div className="flex flex-col gap-1.5">
                 <Label htmlFor="url">URL</Label>
                 <div className="flex gap-2">
                   <Input
@@ -235,9 +249,12 @@ export function EditBookmarkDialog({
                 <div className="flex gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
                   <div className="text-sm">
-                    <p className="font-medium text-destructive">Duplicate URL Detected</p>
+                    <p className="font-medium text-destructive">
+                      Duplicate URL Detected
+                    </p>
                     <p className="text-muted-foreground">
-                      {duplicates.length} bookmark(s) with this URL already exist. Cannot save.
+                      {duplicates.length} bookmark(s) with this URL already
+                      exist. Cannot save.
                     </p>
                   </div>
                 </div>
@@ -245,7 +262,7 @@ export function EditBookmarkDialog({
             </>
           )}
 
-          <div>
+          <div className="flex flex-col gap-1.5">
             <Label htmlFor="description">Description</Label>
             <Textarea
               id="description"
@@ -255,7 +272,7 @@ export function EditBookmarkDialog({
             />
           </div>
 
-          <div>
+          <div className="flex flex-col gap-1.5">
             <Label>Tags</Label>
             <TagMultiSelect
               value={form.watch("tags")}
@@ -267,11 +284,13 @@ export function EditBookmarkDialog({
             </p>
           </div>
 
-          <div>
+          <div className="flex flex-col gap-1.5">
             <Label>Collections</Label>
             <div className="flex flex-wrap gap-2">
               {collections?.map((collection) => {
-                const isSelected = form.watch("collectionIds").includes(collection.id);
+                const isSelected = form
+                  .watch("collectionIds")
+                  .includes(collection.id);
                 return (
                   <Badge
                     key={collection.id}
@@ -282,10 +301,13 @@ export function EditBookmarkDialog({
                       if (isSelected) {
                         form.setValue(
                           "collectionIds",
-                          current.filter((id) => id !== collection.id)
+                          current.filter((id) => id !== collection.id),
                         );
                       } else {
-                        form.setValue("collectionIds", [...current, collection.id]);
+                        form.setValue("collectionIds", [
+                          ...current,
+                          collection.id,
+                        ]);
                       }
                     }}
                   >

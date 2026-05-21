@@ -7,6 +7,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
+import Image from "next/image";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +17,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getFileUrl } from "@/lib/server/s3.server";
-import { ImageDialog } from "./image-dialog";
 import { EditBookmarkDialog } from "./edit-bookmark-dialog";
+import { ImageDialog } from "./image-dialog";
 
 type BookmarkTag = {
   bookmarkId: string;
@@ -70,14 +71,25 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
     return (
       <div className="group relative flex items-center gap-4 p-3 rounded-xl border bg-card hover:bg-accent/50 transition-colors h-20">
         {isImage ? (
-          <div className="h-12 w-12 rounded-lg overflow-hidden bg-muted shrink-0 cursor-zoom-in">
-            <img
-              src={imageUrl!}
+          <button
+            type="button"
+            className="h-12 w-12 rounded-lg overflow-hidden bg-muted shrink-0 cursor-zoom-in relative text-left"
+            onClick={() => setImageDialogOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setImageDialogOpen(true);
+              }
+            }}
+          >
+            <Image
+              src={imageUrl ?? ""}
               alt=""
-              className="h-full w-full object-cover"
-              onClick={() => setImageDialogOpen(true)}
+              fill
+              unoptimized
+              className="object-cover"
             />
-          </div>
+          </button>
         ) : (
           <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
             <ExternalLink className="h-5 w-5 text-primary" />
@@ -137,7 +149,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
           <ImageDialog
             open={imageDialogOpen}
             onOpenChange={setImageDialogOpen}
-            src={imageUrl!}
+            src={imageUrl ?? ""}
           />
         )}
 
@@ -154,19 +166,28 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
     <div className="group relative grid grid-rows-subgrid rounded-xl border bg-card overflow-hidden hover:shadow-md transition-all row-span-4">
       <div className="relative">
         {isImage ? (
-          <div
-            className="aspect-4/3 bg-muted relative cursor-zoom-in overflow-hidden"
+          <button
+            type="button"
+            className="aspect-4/3 bg-muted relative cursor-zoom-in overflow-hidden w-full text-left"
             onClick={() => setImageDialogOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setImageDialogOpen(true);
+              }
+            }}
           >
-            <img
-              src={imageUrl!}
+            <Image
+              src={imageUrl ?? ""}
               alt=""
-              className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              fill
+              unoptimized
+              className="object-cover transition-transform duration-300 group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center">
               <Maximize2 className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
-          </div>
+          </button>
         ) : (
           <div className="aspect-4/3 bg-primary/5 flex items-center justify-center relative overflow-hidden">
             <ExternalLink className="h-10 w-10 text-primary/10 transition-transform duration-300 group-hover:scale-110" />
@@ -176,7 +197,12 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="absolute inset-0"
-              />
+              >
+                <span className="sr-only">
+                  Open {bookmark.title || bookmark.description || bookmark.url}{" "}
+                  in a new tab
+                </span>
+              </a>
             )}
           </div>
         )}
@@ -241,7 +267,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
         <ImageDialog
           open={imageDialogOpen}
           onOpenChange={setImageDialogOpen}
-          src={imageUrl!}
+          src={imageUrl ?? ""}
         />
       )}
 
