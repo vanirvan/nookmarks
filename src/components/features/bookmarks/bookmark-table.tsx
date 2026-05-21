@@ -62,6 +62,7 @@ type Bookmark = {
   url: string | null;
   imagePath: string | null;
   description: string | null;
+  comments?: string | null;
   title?: string | null;
   aiStatus: string | null;
   aiError: string | null;
@@ -267,6 +268,7 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
         url: true,
         tags: true,
         description: false,
+        comments: false,
         createdAt: true,
       };
     },
@@ -463,6 +465,22 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
           ) : (
             <span className="text-xs text-muted-foreground/45 italic">
               No description
+            </span>
+          );
+        },
+      },
+      {
+        accessorKey: "comments",
+        header: "Comments",
+        cell: ({ row }) => {
+          const comments = row.original.comments || "";
+          return comments ? (
+            <span className="text-xs text-foreground font-medium line-clamp-2 max-w-[280px] bg-yellow-500/10 dark:bg-yellow-500/5 border border-yellow-500/20 px-2.5 py-1 rounded-lg block">
+              {comments}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground/35 italic">
+              No comments
             </span>
           );
         },

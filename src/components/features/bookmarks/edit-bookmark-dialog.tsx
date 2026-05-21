@@ -30,11 +30,12 @@ import { useTags } from "@/services/features/tags/hooks/use-tags";
 import { TagMultiSelect } from "./tag-multi-select";
 
 const schema = z.object({
-  id: z.string().uuid(),
+  id: z.uuid(),
   type: z.enum(["bookmark", "image"]),
   url: z.string().url().optional().nullable(),
   imagePath: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
   tags: z.array(z.string()),
   collectionIds: z.array(z.string().uuid()),
   forceRefetchImage: z.boolean().optional(),
@@ -46,6 +47,7 @@ interface Bookmark {
   url: string | null;
   imagePath: string | null;
   description: string | null;
+  comments?: string | null;
   bookmarkTags?: Array<{
     tagId: string;
   }>;
@@ -90,6 +92,7 @@ export function EditBookmarkDialog({
       url: bookmark.url || "",
       imagePath: bookmark.imagePath || "",
       description: bookmark.description || "",
+      comments: bookmark.comments || "",
       tags: bookmark.bookmarkTags?.map((bt) => bt.tagId) || [],
       collectionIds:
         bookmark.bookmarkCollections?.map((bc) => bc.collectionId) || [],
@@ -104,6 +107,7 @@ export function EditBookmarkDialog({
       url: bookmark.url || "",
       imagePath: bookmark.imagePath || "",
       description: bookmark.description || "",
+      comments: bookmark.comments || "",
       tags: bookmark.bookmarkTags?.map((bt) => bt.tagId) || [],
       collectionIds:
         bookmark.bookmarkCollections?.map((bc) => bc.collectionId) || [],
@@ -279,6 +283,16 @@ export function EditBookmarkDialog({
               rows={3}
               placeholder="Add a description..."
               {...form.register("description")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="comments">Personal Notes / Comments</Label>
+            <Textarea
+              id="comments"
+              rows={3}
+              placeholder="Add personal notes or comments..."
+              {...form.register("comments")}
             />
           </div>
 

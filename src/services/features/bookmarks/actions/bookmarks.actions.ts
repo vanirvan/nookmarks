@@ -105,6 +105,7 @@ export const createBookmark = createSafeAction(
           imagePath:
             validatedData.type === "image" ? validatedData.imagePath : null,
           description: validatedData.description,
+          comments: validatedData.comments,
           aiStatus: needsAI ? "pending" : "idle",
           aiMetadata: {
             extractedTitle: "",
@@ -283,6 +284,7 @@ export const getBookmarks = createSafeAction(
       const searchCondition = or(
         ilike(bookmarks.url, searchPattern),
         ilike(bookmarks.description, searchPattern),
+        ilike(bookmarks.comments, searchPattern),
         exists(
           db
             .select()
@@ -420,6 +422,7 @@ export const searchBookmarks = createSafeAction(
           or(
             ilike(bookmarks.url, searchPattern),
             ilike(bookmarks.description, searchPattern),
+            ilike(bookmarks.comments, searchPattern),
             exists(
               db
                 .select()
@@ -509,6 +512,7 @@ export const updateBookmark = createSafeAction(
           imagePath:
             validatedData.type === "image" ? validatedData.imagePath : null,
           description: validatedData.description,
+          comments: validatedData.comments,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(bookmarks.id, validatedData.id))

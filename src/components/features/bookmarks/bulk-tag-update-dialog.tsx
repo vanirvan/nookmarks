@@ -36,14 +36,15 @@ export function BulkTagUpdateDialog({
 
   const { selectedIds, clearSelection } = useSelectionStore();
   const { data: allTags } = useTags();
-  const { data: bookmarks } = useBookmarks();
+  const { data } = useBookmarks();
+  const bookmarksList = data?.bookmarks;
   const { mutate } = useSWRConfig();
 
   // Calculate initial tag states based on current selection
   const initialTagStates = useMemo<Record<string, TagCheckState>>(() => {
-    if (!bookmarks || !allTags || selectedIds.length === 0) return {};
+    if (!bookmarksList || !allTags || selectedIds.length === 0) return {};
 
-    const selectedBookmarks = bookmarks.filter((b) =>
+    const selectedBookmarks = bookmarksList.filter((b) =>
       selectedIds.includes(b.id),
     );
     const states: Record<string, TagCheckState> = {};
@@ -63,7 +64,7 @@ export function BulkTagUpdateDialog({
     });
 
     return states;
-  }, [bookmarks, allTags, selectedIds]); // `open` bukan dependency yang dibaca — dihapus
+  }, [bookmarksList, allTags, selectedIds]); // `open` bukan dependency yang dibaca — dihapus
 
   // Local state for user modifications (starts from initial)
   const [tagStates, setTagStates] =

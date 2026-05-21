@@ -4,6 +4,7 @@ import {
   ExternalLink,
   Loader2,
   Maximize2,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -42,6 +43,7 @@ type Bookmark = {
   url: string | null;
   imagePath: string | null;
   description: string | null;
+  comments?: string | null;
   title?: string | null;
   aiStatus: string | null;
   aiError: string | null;
@@ -198,6 +200,15 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
                   </span>
                 )}
               </div>
+            )}
+            {bookmark.comments && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded-full shrink-0"
+                title={bookmark.comments}
+              >
+                <MessageSquare className="h-2.5 w-2.5" />
+                <span>Note</span>
+              </span>
             )}
           </div>
           <p className="text-xs text-muted-foreground truncate">
@@ -376,6 +387,17 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
           {description || "Image Bookmark"}
         </p>
       </div>
+
+      {bookmark.comments && (
+        <div className="px-3">
+          <div className="flex items-start gap-1.5 text-[11px] text-yellow-800 dark:text-yellow-200 bg-yellow-500/10 dark:bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-2 group/comment hover:bg-yellow-500/15 transition-colors">
+            <MessageSquare className="h-3.5 w-3.5 mt-0.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+            <p className="line-clamp-2 italic" title={bookmark.comments}>
+              {bookmark.comments}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="px-3 pb-3 flex items-center justify-between gap-2">
         {tags.length > 0 ? (

@@ -30,8 +30,9 @@ import { TagMultiSelect } from "./tag-multi-select";
 
 const schema = z.object({
   type: z.literal("bookmark"),
-  url: z.string().url("Please enter a valid URL"),
+  url: z.url("Please enter a valid URL"),
   description: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
   tags: z.array(z.string()),
   collectionIds: z.array(z.string().uuid()),
 });
@@ -68,6 +69,7 @@ export function AddBookmarkDialog({
       type: "bookmark" as const,
       url: "",
       description: "",
+      comments: "",
       tags: [],
       collectionIds: [],
     },
@@ -79,6 +81,7 @@ export function AddBookmarkDialog({
         type: "bookmark" as const,
         url: "",
         description: "",
+        comments: "",
         tags: [],
         collectionIds: [],
       });
@@ -270,6 +273,16 @@ export function AddBookmarkDialog({
               rows={3}
               placeholder="Add a description..."
               {...form.register("description")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="comments">Personal Notes / Comments</Label>
+            <Textarea
+              id="comments"
+              rows={3}
+              placeholder="Add personal notes or comments..."
+              {...form.register("comments")}
             />
           </div>
 

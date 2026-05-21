@@ -145,6 +145,7 @@ export const bookmarks = pgTable(
     url: text(),
     imagePath: text("image_path"),
     description: text(),
+    comments: text(),
     aiStatus: aiStatus("ai_status").default("skipped"),
     aiError: text("ai_error"),
     aiMetadata: jsonb("ai_metadata"),

@@ -5,6 +5,7 @@ export const createBookmarkSchema = z.object({
   url: z.string().url().optional().nullable(),
   imagePath: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
+  comments: z.string().optional().nullable(),
   aiTagging: z.boolean().optional(),
   aiDescription: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
