@@ -1,0 +1,310 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import { Download, AlertTriangle, Loader2, Bookmark } from "lucide-react";
+import { createBookmark, fetchUrlMetadata, checkDuplicateUrl } from "@/services/features/bookmarks/actions/bookmarks.actions";
+import { useTags } from "@/services/features/tags/hooks/use-tags";
+import { useCollections } from "@/services/features/collections/hooks/use-collections";
+import { useBookmarks } from "@/services/features/bookmarks/hooks/use-bookmarks";
+import { toast } from "sonner";
+import { TagMultiSelect } from "./tag-multi-select";
+
+const schema = z.object({
+  type: z.literal("bookmark"),
+  url: z.string().url("Please enter a valid URL"),
+  description: z.string().optional().nullable(),
+  tags: z.array(z.string()),
+  collectionIds: z.array(z.string().uuid()),
+});
+
+interface AddBookmarkDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function AddBookmarkDialog({ open, onOpenChange }: AddBookmarkDialogProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isFetchingMetadata, setIsFetchingMetadata] = useState(false);
+  const [isCheckingDuplicate, setIsCheckingDuplicate] = useState(false);
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [faviconError, setFaviconError] = useState(false);
+  const { data: tags } = useTags();
+  const { data: collections } = useCollections();
+  const { mutate } = useBookmarks();
+
+  const form = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      type: "bookmark" as const,
+      url: "",
+      description: "",
+      tags: [],
+      collectionIds: [],
+    },
+  });
+
+  useEffect(() => {
+    if (!open) {
+      form.reset();
+      setDuplicates([]);
+      setFaviconError(false);
+    }
+  }, [open, form]);
+
+  useEffect(() => {
+    const subscription = form.watch(async (value, { name }) => {
+      if (name === "url" && value.url && value.url.length > 10) {
+        const urlValue = value.url;
+        
+        const timeoutId = setTimeout(async () => {
+          setIsCheckingDuplicate(true);
+          try {
+            const result = await checkDuplicateUrl({ url: urlValue });
+            if (result.success) {
+              setDuplicates(result.data || []);
+            }
+          } catch (error) {
+            console.error("Duplicate check error:", error);
+          } finally {
+            setIsCheckingDuplicate(false);
+          }
+
+          setIsFetchingMetadata(true);
+          try {
+            const result = await fetchUrlMetadata({ url: urlValue });
+            if (result.success && result.data) {
+              if (result.data.title && !form.getValues("description")) {
+                form.setValue("description", result.data.title);
+              }
+            }
+          } catch (error) {
+            console.error("Metadata fetch error:", error);
+          } finally {
+            setIsFetchingMetadata(false);
+          }
+        }, 800);
+
+        return () => clearTimeout(timeoutId);
+      } else if (name === "url" && (!value.url || value.url.length <= 10)) {
+        setDuplicates([]);
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
+
+  const handleFetchMetadata = async () => {
+    const url = form.getValues("url");
+    if (!url) {
+      toast.error("Please enter a URL first");
+      return;
+    }
+
+    setIsFetchingMetadata(true);
+    try {
+      const result = await fetchUrlMetadata({ url });
+      if (result.success && result.data) {
+        if (result.data.title) {
+          form.setValue("description", result.data.title);
+        }
+        toast.success("Metadata fetched successfully");
+      } else {
+        toast.error("Failed to fetch metadata");
+      }
+    } catch {
+      toast.error("An error occurred");
+    } finally {
+      setIsFetchingMetadata(false);
+    }
+  };
+
+  const onSubmit = async (data: z.infer<typeof schema>) => {
+    if (duplicates.length > 0) {
+      toast.error("Cannot save: duplicate URL detected");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await createBookmark(data);
+      if (result.success) {
+        toast.success("Bookmark created successfully");
+        mutate();
+        onOpenChange(false);
+      } else {
+        toast.error("Failed to create bookmark");
+      }
+    } catch {
+      toast.error("An error occurred");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const hasDuplicates = duplicates.length > 0;
+  const urlValue = form.watch("url");
+  
+  let domain = "";
+  try {
+    if (urlValue) {
+      domain = new URL(urlValue).hostname;
+    }
+  } catch {
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Bookmark</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <div>
+            <Label htmlFor="url">URL</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="url"
+                  type="url"
+                  placeholder="https://example.com"
+                  {...form.register("url")}
+                  className="pr-10"
+                />
+                {domain && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {!faviconError ? (
+                      <img
+                        src={`https://www.google.com/s2/favicons?domain=${domain}&sz=16`}
+                        alt=""
+                        className="h-4 w-4"
+                        onError={() => setFaviconError(true)}
+                      />
+                    ) : (
+                      <Bookmark className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </div>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleFetchMetadata}
+                disabled={isFetchingMetadata}
+              >
+                {isFetchingMetadata ? (
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                ) : (
+                  <Download className="h-4 w-4 shrink-0" />
+                )}
+                <span className="hidden sm:inline">
+                  {isFetchingMetadata ? "Fetching..." : "Fetch"}
+                </span>
+              </Button>
+            </div>
+            {form.formState.errors.url && (
+              <p className="text-xs text-destructive mt-1">
+                {form.formState.errors.url.message}
+              </p>
+            )}
+            {isCheckingDuplicate && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Checking for duplicates...
+              </p>
+            )}
+          </div>
+
+          {hasDuplicates && (
+            <div className="flex gap-3 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+              <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+              <div className="text-sm">
+                <p className="font-medium text-destructive">Duplicate URL Detected</p>
+                <p className="text-muted-foreground">
+                  {duplicates.length} bookmark(s) with this URL already exist. Cannot save.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              rows={3}
+              placeholder="Add a description..."
+              {...form.register("description")}
+            />
+          </div>
+
+          <div>
+            <Label>Tags</Label>
+            <TagMultiSelect
+              value={form.watch("tags")}
+              onChange={(tags) => form.setValue("tags", tags)}
+              availableTags={tags || []}
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Type to search or create new tags with &quot;/&quot;
+            </p>
+          </div>
+
+          <div>
+            <Label>Collections</Label>
+            <div className="flex flex-wrap gap-2 mt-2">
+              {collections?.map((collection) => {
+                const isSelected = form.watch("collectionIds").includes(collection.id);
+                return (
+                  <Badge
+                    key={collection.id}
+                    variant={isSelected ? "default" : "outline"}
+                    className="cursor-pointer"
+                    onClick={() => {
+                      const current = form.getValues("collectionIds");
+                      if (isSelected) {
+                        form.setValue(
+                          "collectionIds",
+                          current.filter((id) => id !== collection.id)
+                        );
+                      } else {
+                        form.setValue("collectionIds", [...current, collection.id]);
+                      }
+                    }}
+                  >
+                    {collection.name}
+                  </Badge>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={isLoading || hasDuplicates}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                  <span>Creating...</span>
+                </>
+              ) : (
+                "Create Bookmark"
+              )}
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}

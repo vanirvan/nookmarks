@@ -16,8 +16,11 @@ import {
   createBookmarkSchema,
   deleteBookmarkSchema,
   updateBookmarkSchema,
+  fetchUrlMetadataSchema,
+  checkDuplicateUrlSchema,
 } from "@/lib/validations/bookmarks";
 import { createNestedTags } from "@/services/features/tags/actions/tags.actions";
+import * as cheerio from "cheerio";
 
 export const createBookmark = createSafeAction(
   createBookmarkSchema,
@@ -156,32 +159,56 @@ export const createBookmark = createSafeAction(
 
 export const getBookmarks = createSafeAction(
   null,
-  async (data: { collectionId?: string | null }, session) => {
+  async (
+    data: {
+      collectionId?: string | null;
+      tagId?: string | null;
+      includeNestedTags?: boolean;
+    },
+    session,
+  ) => {
     const result = await db.query.bookmarks.findMany({
-      where: (bookmarks, { and, eq, exists, notExists }) =>
-        and(
-          eq(bookmarks.userId, session.user.id),
-          data.collectionId === null
-            ? notExists(
-                db
-                  .select()
-                  .from(bookmarkCollections)
-                  .where(eq(bookmarkCollections.bookmarkId, bookmarks.id)),
-              )
-            : data.collectionId
-              ? exists(
-                  db
-                    .select()
-                    .from(bookmarkCollections)
-                    .where(
-                      and(
-                        eq(bookmarkCollections.bookmarkId, bookmarks.id),
-                        eq(bookmarkCollections.collectionId, data.collectionId),
-                      ),
-                    ),
-                )
-              : undefined,
-        ),
+      where: (bookmarks, { and, eq, exists, notExists }) => {
+        const conditions = [eq(bookmarks.userId, session.user.id)];
+
+        if (data.collectionId === null) {
+          conditions.push(
+            notExists(
+              db
+                .select()
+                .from(bookmarkCollections)
+                .where(eq(bookmarkCollections.bookmarkId, bookmarks.id)),
+            ),
+          );
+        } else if (data.collectionId) {
+          conditions.push(
+            exists(
+              db
+                .select()
+                .from(bookmarkCollections)
+                .where(
+                  and(
+                    eq(bookmarkCollections.bookmarkId, bookmarks.id),
+                    eq(bookmarkCollections.collectionId, data.collectionId),
+                  ),
+                ),
+            ),
+          );
+        }
+
+        if (data.tagId === null) {
+          conditions.push(
+            notExists(
+              db
+                .select()
+                .from(bookmarkTags)
+                .where(eq(bookmarkTags.bookmarkId, bookmarks.id)),
+            ),
+          );
+        }
+
+        return and(...conditions);
+      },
       with: {
         bookmarkTags: {
           with: {
@@ -197,7 +224,44 @@ export const getBookmarks = createSafeAction(
       orderBy: (bookmarks, { desc }) => [desc(bookmarks.createdAt)],
     });
 
-    return result.map((item) => ({
+    let filtered = result;
+    if (data.tagId && data.tagId !== null) {
+      if (data.includeNestedTags) {
+        const allTags = await db.query.tags.findMany({
+          where: eq(tags.userId, session.user.id),
+        });
+        const tagMap = new Map(allTags.map((t) => [t.id, t]));
+
+        const computeTagPathsIDs = (tagId: string): string[] => {
+          const pathIDs: string[] = [];
+          let current = tagMap.get(tagId);
+          while (current) {
+            pathIDs.unshift(current.id);
+            current = current.parent ? tagMap.get(current.parent) : undefined;
+          }
+          return pathIDs;
+        };
+
+        const selectedPathIDs = computeTagPathsIDs(data.tagId).join("/");
+
+        const descendantTagIds = allTags
+          .filter((t) => {
+            const pathIDs = computeTagPathsIDs(t.id).join("/");
+            return pathIDs === selectedPathIDs || pathIDs.startsWith(selectedPathIDs + "/");
+          })
+          .map((t) => t.id);
+
+        filtered = result.filter((bookmark) =>
+          bookmark.bookmarkTags.some((bt) => descendantTagIds.includes(bt.tagId)),
+        );
+      } else {
+        filtered = result.filter((bookmark) =>
+          bookmark.bookmarkTags.some((bt) => bt.tagId === data.tagId),
+        );
+      }
+    }
+
+    return filtered.map((item) => ({
       ...item,
       aiMetadata: {},
     }));
@@ -348,6 +412,7 @@ export const updateBookmark = createSafeAction(
           imagePath:
             validatedData.type === "image" ? validatedData.imagePath : null,
           description: validatedData.description,
+          updatedAt: new Date().toISOString(),
         })
         .where(eq(bookmarks.id, validatedData.id))
         .returning();
@@ -396,6 +461,10 @@ export const updateBookmark = createSafeAction(
         );
       }
 
+      if (validatedData.forceRefetchImage && existingBookmark.imagePath) {
+        await deleteFile(existingBookmark.imagePath);
+      }
+
       return { ...updatedBookmark, aiMetadata: {} };
     });
   },
@@ -442,4 +511,126 @@ export const getUnsortedBookmarksCount = createSafeAction(
 
     return Number(result[0]?.count || 0);
   },
+);
+
+export const getUntaggedBookmarksCount = createSafeAction(
+  null,
+  async (_, session) => {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookmarks)
+      .where(
+        and(
+          eq(bookmarks.userId, session.user.id),
+          notExists(
+            db
+              .select()
+              .from(bookmarkTags)
+              .where(eq(bookmarkTags.bookmarkId, bookmarks.id)),
+          ),
+        ),
+      );
+
+    return Number(result[0]?.count || 0);
+  },
+);
+
+export const fetchUrlMetadata = createSafeAction(
+  fetchUrlMetadataSchema,
+  async (validatedData, session) => {
+    const { url } = validatedData;
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+
+      const response = await fetch(url, {
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Mozilla/5.0 (compatible; Nookmarks/1.0)",
+        },
+        redirect: "follow",
+      });
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const html = await response.text();
+      const $ = cheerio.load(html);
+
+      const title =
+        $('meta[property="og:title"]').attr("content") ||
+        $("title").text() ||
+        new URL(url).hostname;
+
+      const description =
+        $('meta[property="og:description"]').attr("content") ||
+        $('meta[name="description"]').attr("content") ||
+        "";
+
+      let image =
+        $('meta[property="og:image"]').attr("content") ||
+        $('meta[name="twitter:image"]').attr("content") ||
+        $("img").first().attr("src") ||
+        "";
+
+      if (image && !image.startsWith("http")) {
+        const baseUrl = new URL(url);
+        if (image.startsWith("//")) {
+          image = `https:${image}`;
+        } else if (image.startsWith("/")) {
+          image = `${baseUrl.origin}${image}`;
+        } else {
+          image = `${baseUrl.origin}/${image}`;
+        }
+      }
+
+      return {
+        title: title.trim(),
+        description: description.trim(),
+        image: image.trim(),
+      };
+    } catch (error) {
+      if ((error as Error).name === "AbortError") {
+        throw new Error("Request timeout");
+      }
+      throw new Error(`Failed to fetch metadata: ${(error as Error).message}`);
+    }
+  }
+);
+
+export const checkDuplicateUrl = createSafeAction(
+  checkDuplicateUrlSchema,
+  async (validatedData, session) => {
+    const { url, excludeId } = validatedData;
+
+    const normalizedUrl = url.toLowerCase().trim();
+
+    const duplicates = await db.query.bookmarks.findMany({
+      where: (bookmarks, { and, eq, ne, sql }) =>
+        and(
+          eq(bookmarks.userId, session.user.id),
+          sql`LOWER(${bookmarks.url}) = ${normalizedUrl}`,
+          excludeId ? ne(bookmarks.id, excludeId) : undefined
+        ),
+      with: {
+        bookmarkTags: {
+          with: {
+            tag: true,
+          },
+        },
+        bookmarkCollections: {
+          with: {
+            collection: true,
+          },
+        },
+      },
+      limit: 5,
+    });
+
+    return duplicates;
+  }
 );

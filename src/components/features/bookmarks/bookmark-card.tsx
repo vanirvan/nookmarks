@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getFileUrl } from "@/lib/server/s3.server";
 import { ImageDialog } from "./image-dialog";
+import { EditBookmarkDialog } from "./edit-bookmark-dialog";
 
 type BookmarkTag = {
   bookmarkId: string;
@@ -59,6 +60,7 @@ interface BookmarkCardProps {
 
 export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
   const isImage = bookmark.type === "image";
   const imageUrl =
     isImage && bookmark.imagePath ? getFileUrl(bookmark.imagePath) : null;
@@ -118,7 +120,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
               <MoreHorizontal className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" /> Edit
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -138,16 +140,22 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
             src={imageUrl!}
           />
         )}
+
+        <EditBookmarkDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          bookmark={bookmark}
+        />
       </div>
     );
   }
 
   return (
-    <div className="group relative flex flex-col rounded-xl border bg-card overflow-hidden hover:shadow-md transition-all row-span-4 grid grid-rows-subgrid">
+    <div className="group relative grid grid-rows-subgrid rounded-xl border bg-card overflow-hidden hover:shadow-md transition-all row-span-4">
       <div className="relative">
         {isImage ? (
           <div
-            className="aspect-[4/3] bg-muted relative cursor-zoom-in overflow-hidden"
+            className="aspect-4/3 bg-muted relative cursor-zoom-in overflow-hidden"
             onClick={() => setImageDialogOpen(true)}
           >
             <img
@@ -160,7 +168,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
             </div>
           </div>
         ) : (
-          <div className="aspect-[4/3] bg-primary/5 flex items-center justify-center relative overflow-hidden">
+          <div className="aspect-4/3 bg-primary/5 flex items-center justify-center relative overflow-hidden">
             <ExternalLink className="h-10 w-10 text-primary/10 transition-transform duration-300 group-hover:scale-110" />
             {bookmark.url && (
               <a
@@ -216,7 +224,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
             <MoreHorizontal className="h-3 w-3" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
               <Pencil className="mr-2 h-4 w-4" /> Edit
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -236,6 +244,12 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
           src={imageUrl!}
         />
       )}
+
+      <EditBookmarkDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        bookmark={bookmark}
+      />
     </div>
   );
 }

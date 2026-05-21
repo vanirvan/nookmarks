@@ -1,7 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import { PageHeader } from "@/components/features/app/page-header";
 import { BookmarkList } from "@/components/features/bookmarks/bookmark-list";
+import { AddBookmarkDialog } from "@/components/features/bookmarks/add-bookmark-dialog";
 
 interface BookmarkPageProps {
   title: string;
@@ -18,6 +20,8 @@ export function BookmarkPage({
   collectionId,
   iconName,
 }: BookmarkPageProps) {
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -25,8 +29,14 @@ export function BookmarkPage({
         description={description}
         fallbackIconName={fallbackIconName}
         iconName={iconName}
+        onAddClick={() => setAddDialogOpen(true)}
       />
       <BookmarkList collectionId={collectionId} />
+      
+      <AddBookmarkDialog
+        open={addDialogOpen}
+        onOpenChange={setAddDialogOpen}
+      />
     </div>
   );
 }

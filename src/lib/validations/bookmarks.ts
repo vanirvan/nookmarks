@@ -13,8 +13,18 @@ export const createBookmarkSchema = z.object({
 
 export const updateBookmarkSchema = createBookmarkSchema.extend({
   id: z.string(),
+  forceRefetchImage: z.boolean().optional(),
 });
 
 export const deleteBookmarkSchema = z.object({
   id: z.string(),
+});
+
+export const fetchUrlMetadataSchema = z.object({
+  url: z.string().url("Invalid URL"),
+});
+
+export const checkDuplicateUrlSchema = z.object({
+  url: z.string().url(),
+  excludeId: z.string().uuid().optional(),
 });
