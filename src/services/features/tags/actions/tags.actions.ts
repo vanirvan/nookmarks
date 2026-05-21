@@ -14,7 +14,6 @@ type Tag = {
   id: string;
   userId: string;
   title: string;
-  description: string | null;
   color: "gray" | "green" | "red" | "yellow" | "aqua" | "white" | "black";
   parent: string | null;
   pinned: boolean;
@@ -70,7 +69,6 @@ export const createNestedTags = createSafeAction(
             parent: currentParent,
             color: "gray",
             pinned: false,
-            description: "",
           })
           .returning();
 

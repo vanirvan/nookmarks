@@ -260,7 +260,6 @@ export const tags = pgTable(
     id: uuid().defaultRandom().primaryKey().notNull(),
     userId: text("user_id").notNull(),
     title: text().notNull(),
-    description: text().default(""),
     color: tagColor().default("gray").notNull(),
     parent: uuid(),
     pinned: boolean().default(false).notNull(),

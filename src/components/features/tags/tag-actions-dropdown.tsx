@@ -60,14 +60,14 @@ export function TagActionsDropdown({
           <Button
             variant="ghost"
             size="icon-sm"
-            className="h-6 w-6"
+            className="h-6 w-6 hover:bg-black/10 dark:hover:bg-white/15 hover:text-foreground active:bg-black/15 dark:active:bg-white/20 aria-expanded:bg-black/10 dark:aria-expanded:bg-white/15"
             onClick={(e) => e.stopPropagation()}
           />
         }
       >
         <MoreVertical className="h-3 w-3" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
+      <DropdownMenuContent align="end" className="w-44">
         <DropdownMenuItem onClick={onEditClick}>
           <Pencil className="h-4 w-4" />
           Edit Tag

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronRight, Info, Pin, Plus, Search, Tag } from "lucide-react";
+import { ChevronRight, Pin, Plus, Search, Tag } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { CreateTagDialog } from "@/components/features/tags/create-tag-dialog";
@@ -42,7 +42,6 @@ type TagWithPaths = {
   id: string;
   userId: string;
   title: string;
-  description: string | null;
   color: "gray" | "green" | "red" | "yellow" | "aqua" | "white" | "black";
   parent: string | null;
   pinned: boolean;
@@ -125,10 +124,22 @@ export function NavTags() {
             {isLoading ? (
               <>
                 <SidebarMenuItem>
-                  <Skeleton className="h-8 w-full" />
+                  <SidebarMenuButton className="pointer-events-none">
+                    <Skeleton className="h-2 w-2 rounded-full shrink-0" />
+                    <Skeleton className="h-3.5 w-24" />
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <Skeleton className="h-8 w-full" />
+                  <SidebarMenuButton className="pointer-events-none">
+                    <Skeleton className="h-2 w-2 rounded-full shrink-0" />
+                    <Skeleton className="h-3.5 w-32" />
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton className="pointer-events-none">
+                    <Skeleton className="h-2 w-2 rounded-full shrink-0" />
+                    <Skeleton className="h-3.5 w-20" />
+                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </>
             ) : rootTags.length > 0 ? (
@@ -231,6 +242,8 @@ function TagTreeItem({
   const isActive = activeTagId === tag.id;
   const itemCount = itemCounts[tag.id] || 0;
 
+  const [isOpen, setIsOpen] = useState(depth < 2);
+
   const getColorClass = (color: string): string => {
     const colorMap: Record<string, string> = {
       gray: "bg-muted-foreground",
@@ -245,7 +258,7 @@ function TagTreeItem({
   };
 
   return (
-    <Collapsible defaultOpen={depth < 2}>
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <SidebarMenuItem className="relative flex items-center w-full">
         {hasChildren && (
           <CollapsibleTrigger
@@ -256,36 +269,21 @@ function TagTreeItem({
               />
             }
           >
-            <ChevronRight className="h-3 w-3 transition-transform [[data-state=open]>&]:rotate-90" />
+            <ChevronRight className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`} />
           </CollapsibleTrigger>
         )}
         <SidebarMenuButton
           onClick={() => onTagClick(tag.id)}
           isActive={isActive}
-          className="flex-1 min-w-0 group/tag"
+          className="flex-1 min-w-0 transition-[padding] duration-200 group-hover/menu-item:pr-10 group-focus-within/menu-item:pr-10"
         >
           <div className={`h-2 w-2 rounded-full ${getColorClass(tag.color)}`} />
           <span className="flex-1 truncate">{tag.title}</span>
           {tag.pinned && (
             <Pin className="h-3 w-3 text-muted-foreground shrink-0 rotate-45" />
           )}
-          {tag.description && (
-            <Info className="h-3 w-3 text-muted-foreground shrink-0" />
-          )}
         </SidebarMenuButton>
-        {tag.description && (
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <div className="absolute left-0 top-0 w-full h-full pointer-events-none" />
-              }
-            />
-            <TooltipContent>
-              <p className="max-w-xs">{tag.description}</p>
-            </TooltipContent>
-          </Tooltip>
-        )}
-        <div className="absolute right-2 top-1/2 -translate-y-1/2 group-hover/tag:opacity-100 opacity-0 transition-opacity">
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 group-hover/menu-item:opacity-100 group-focus-within/menu-item:opacity-100 opacity-0 transition-opacity">
           <TagActionsDropdown
             isPinned={tag.pinned}
             currentColor={tag.color}

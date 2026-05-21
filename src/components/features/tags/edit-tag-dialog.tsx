@@ -14,14 +14,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { updateTag } from "@/services/features/tags/actions/tags.actions";
 import { useTags } from "@/services/features/tags/hooks/use-tags";
 
 const schema = z.object({
   title: z.string().min(1, "Title is required").max(255),
-  description: z.string().optional(),
-  parent: z.string().uuid().nullable().optional(),
+  parent: z.preprocess(
+    (val) => (val === "" ? null : val),
+    z.uuid().nullable().optional(),
+  ),
 });
 
 interface EditTagDialogProps {
@@ -30,7 +31,6 @@ interface EditTagDialogProps {
   tag: {
     id: string;
     title: string;
-    description: string | null;
     parent: string | null;
   };
 }
@@ -43,7 +43,6 @@ export function EditTagDialog({ open, onOpenChange, tag }: EditTagDialogProps) {
     resolver: zodResolver(schema),
     defaultValues: {
       title: tag.title,
-      description: tag.description || "",
       parent: tag.parent,
     },
   });
@@ -51,7 +50,6 @@ export function EditTagDialog({ open, onOpenChange, tag }: EditTagDialogProps) {
   useEffect(() => {
     form.reset({
       title: tag.title,
-      description: tag.description || "",
       parent: tag.parent,
     });
   }, [tag, form]);
@@ -97,14 +95,6 @@ export function EditTagDialog({ open, onOpenChange, tag }: EditTagDialogProps) {
             )}
           </div>
           <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
-            <Textarea
-              id="description"
-              rows={3}
-              {...form.register("description")}
-            />
-          </div>
-          <div className="space-y-2">
             <Label htmlFor="parent">Parent Tag (optional)</Label>
             <select
               id="parent"
@@ -118,6 +108,11 @@ export function EditTagDialog({ open, onOpenChange, tag }: EditTagDialogProps) {
                 </option>
               ))}
             </select>
+            {form.formState.errors.parent && (
+              <p className="text-xs text-destructive">
+                {form.formState.errors.parent.message}
+              </p>
+            )}
           </div>
           <div className="flex justify-end gap-2">
             <Button
