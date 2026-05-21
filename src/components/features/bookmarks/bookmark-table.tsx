@@ -4,9 +4,6 @@ import {
   type ColumnDef,
   flexRender,
   getCoreRowModel,
-  getPaginationRowModel,
-  getSortedRowModel,
-  type SortingState,
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -21,7 +18,7 @@ import {
   Trash2,
 } from "lucide-react";
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -40,6 +37,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { getFileUrl } from "@/lib/server/s3.server";
+import { cn } from "@/lib/utils";
+import { useBookmarksQuery } from "@/services/features/bookmarks/hooks/use-bookmarks-query";
 import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
 
 import { DeleteBookmarkDialog } from "./delete-bookmark-dialog";
@@ -211,9 +210,45 @@ function BookmarkActionsCell({ bookmark }: { bookmark: Bookmark }) {
 
 export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
   const { selectedIds, toggleSelection, setSelectedIds } = useSelectionStore();
-  const [sorting, setSorting] = useState<SortingState>([
-    { id: "createdAt", desc: true },
-  ]);
+  const [queryState, setQueryState] = useBookmarksQuery();
+
+  const sortVal = queryState.sort;
+  const orderVal = queryState.order;
+
+  const handleSort = useCallback(
+    (field: "createdAt" | "title" | "url") => {
+      let nextOrder: "asc" | "desc" = "desc";
+      if (sortVal === field) {
+        nextOrder = orderVal === "desc" ? "asc" : "desc";
+      } else {
+        nextOrder = field === "title" || field === "url" ? "asc" : "desc";
+      }
+
+      setQueryState({
+        sort: field,
+        order: nextOrder,
+        page: 1,
+      });
+    },
+    [sortVal, orderVal, setQueryState],
+  );
+
+  const getSortIcon = useCallback(
+    (field: "createdAt" | "title" | "url") => {
+      if (sortVal !== field) {
+        return <ArrowUpDown className="h-3 w-3 opacity-50" />;
+      }
+      return (
+        <ArrowUpDown
+          className={cn(
+            "h-3 w-3 text-primary transition-transform duration-200",
+            orderVal === "asc" ? "rotate-180" : "",
+          )}
+        />
+      );
+    },
+    [sortVal, orderVal],
+  );
 
   // Load column visibility from localStorage if exists
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
@@ -305,38 +340,17 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
       },
       {
         accessorKey: "title",
-        header: ({ column }) => (
+        header: () => (
           <Button
             variant="ghost"
             size="sm"
-            className="px-1 gap-1 text-xs"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="px-1 gap-1 text-xs hover:bg-muted/50"
+            onClick={() => handleSort("title")}
           >
             Title
-            <ArrowUpDown className="h-3 w-3" />
+            {getSortIcon("title")}
           </Button>
         ),
-        sortingFn: (rowA, rowB) => {
-          const metaA = (rowA.original.aiMetadata || {}) as Record<
-            string,
-            string
-          >;
-          const metaB = (rowB.original.aiMetadata || {}) as Record<
-            string,
-            string
-          >;
-          const titleA =
-            metaA.extractedTitle ||
-            rowA.original.description ||
-            rowA.original.url ||
-            "";
-          const titleB =
-            metaB.extractedTitle ||
-            rowB.original.description ||
-            rowB.original.url ||
-            "";
-          return titleA.localeCompare(titleB);
-        },
         cell: ({ row }) => {
           const bookmark = row.original;
           const metadata = (bookmark.aiMetadata || {}) as Record<
@@ -375,15 +389,15 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
       },
       {
         accessorKey: "url",
-        header: ({ column }) => (
+        header: () => (
           <Button
             variant="ghost"
             size="sm"
-            className="px-1 gap-1 text-xs"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="px-1 gap-1 text-xs hover:bg-muted/50"
+            onClick={() => handleSort("url")}
           >
             URL
-            <ArrowUpDown className="h-3 w-3" />
+            {getSortIcon("url")}
           </Button>
         ),
         cell: ({ row }) => {
@@ -455,15 +469,15 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
       },
       {
         accessorKey: "createdAt",
-        header: ({ column }) => (
+        header: () => (
           <Button
             variant="ghost"
             size="sm"
-            className="px-1 gap-1 text-xs"
-            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="px-1 gap-1 text-xs hover:bg-muted/50"
+            onClick={() => handleSort("createdAt")}
           >
             Created
-            <ArrowUpDown className="h-3 w-3" />
+            {getSortIcon("createdAt")}
           </Button>
         ),
         cell: ({ row }) => {
@@ -482,34 +496,18 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
         enableHiding: false,
       },
     ],
-    [selectedIds, toggleSelection, setSelectedIds],
+    [selectedIds, toggleSelection, setSelectedIds, handleSort, getSortIcon],
   );
 
   const table = useReactTable({
     data: bookmarks,
     columns,
     state: {
-      sorting,
       columnVisibility,
     },
-    onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    initialState: {
-      pagination: {
-        pageSize: 10,
-      },
-    },
   });
-
-  const pageCount = table.getPageCount();
-  const pageIndex = table.getState().pagination.pageIndex;
-  const pageSize = table.getState().pagination.pageSize;
-  const totalRows = bookmarks.length;
-  const startRow = pageIndex * pageSize + 1;
-  const endRow = Math.min((pageIndex + 1) * pageSize, totalRows);
 
   return (
     <div className="flex flex-col gap-4">
@@ -600,99 +598,6 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
           </TableBody>
         </Table>
       </div>
-
-      {/* Table Pagination */}
-      {totalRows > 0 && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 py-2 px-1">
-          <div className="text-xs text-muted-foreground">
-            Showing{" "}
-            <span className="font-medium text-foreground">{startRow}</span> to{" "}
-            <span className="font-medium text-foreground">{endRow}</span> of{" "}
-            <span className="font-medium text-foreground">{totalRows}</span>{" "}
-            bookmarks
-          </div>
-
-          <div className="flex items-center gap-4">
-            {/* Page Size Dropdown */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">
-                Rows per page:
-              </span>
-              <select
-                value={pageSize}
-                onChange={(e) => table.setPageSize(Number(e.target.value))}
-                className="h-8 rounded-lg border border-input bg-background/50 px-2 py-1 text-xs outline-none focus:border-ring focus:ring-2 focus:ring-ring/25"
-              >
-                {[10, 25, 50, 100].map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Pagination Action Buttons */}
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs px-2"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                Prev
-              </Button>
-
-              {/* Responsive Page Numbers */}
-              {Array.from({ length: pageCount }, (_, i) => i).map(
-                (pageNumber) => {
-                  // Show current page, first, last, and immediate surrounding pages
-                  const isFirst = pageNumber === 0;
-                  const isLast = pageNumber === pageCount - 1;
-                  const isAround = Math.abs(pageNumber - pageIndex) <= 1;
-
-                  if (!isFirst && !isLast && !isAround) {
-                    // Show ellipsis for gaps
-                    if (pageNumber === 1 || pageNumber === pageCount - 2) {
-                      return (
-                        <span
-                          key={`ellipsis-${pageNumber}`}
-                          className="text-xs px-1 text-muted-foreground/60 select-none"
-                        >
-                          ...
-                        </span>
-                      );
-                    }
-                    return null;
-                  }
-
-                  return (
-                    <Button
-                      key={`page-${pageNumber}`}
-                      variant={pageIndex === pageNumber ? "default" : "outline"}
-                      size="icon-sm"
-                      className="h-8 w-8 text-xs font-semibold"
-                      onClick={() => table.setPageIndex(pageNumber)}
-                    >
-                      {pageNumber + 1}
-                    </Button>
-                  );
-                },
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-8 text-xs px-2"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

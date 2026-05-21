@@ -2,6 +2,7 @@
 
 import { Inbox, LayoutDashboard, Tag } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -16,7 +17,7 @@ import {
   useUnsortedBookmarksCount,
   useUntaggedBookmarksCount,
 } from "@/services/features/bookmarks/hooks/use-bookmarks-count";
-import { useViewStore } from "@/services/features/bookmarks/store/view-store";
+import { useBookmarksQuery } from "@/services/features/bookmarks/hooks/use-bookmarks-query";
 
 export function NavMain() {
   const { data: allCount, isLoading: isLoadingAll } = useAllBookmarksCount();
@@ -24,10 +25,16 @@ export function NavMain() {
     useUnsortedBookmarksCount();
   const { data: untaggedCount, isLoading: isLoadingUntagged } =
     useUntaggedBookmarksCount();
-  const { tagFilter, setTagFilter } = useViewStore();
+
+  const pathname = usePathname();
+  const [queryState, setQueryState] = useBookmarksQuery();
+  const tagFilter = queryState.tag;
 
   const handleUntaggedClick = () => {
-    setTagFilter(tagFilter === "untagged" ? null : "untagged");
+    setQueryState({
+      tag: tagFilter === "untagged" ? null : "untagged",
+      page: 1,
+    });
   };
 
   return (
@@ -35,9 +42,9 @@ export function NavMain() {
       <SidebarGroupContent>
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton 
+            <SidebarMenuButton
               render={<Link href="/app" />}
-              isActive={tagFilter === null}
+              isActive={pathname === "/app" && tagFilter === null}
             >
               <LayoutDashboard />
               <span>All Bookmarks</span>
@@ -51,7 +58,10 @@ export function NavMain() {
             </SidebarMenuBadge>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton render={<Link href="/app/unsorted" />}>
+            <SidebarMenuButton
+              render={<Link href="/app/unsorted" />}
+              isActive={pathname === "/app/unsorted"}
+            >
               <Inbox />
               <span>Unsorted</span>
             </SidebarMenuButton>
@@ -64,7 +74,7 @@ export function NavMain() {
             </SidebarMenuBadge>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton 
+            <SidebarMenuButton
               onClick={handleUntaggedClick}
               isActive={tagFilter === "untagged"}
             >

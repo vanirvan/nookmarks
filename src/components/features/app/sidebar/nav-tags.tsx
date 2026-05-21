@@ -25,8 +25,8 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useBookmarksQuery } from "@/services/features/bookmarks/hooks/use-bookmarks-query";
 import { usePreferencesStore } from "@/services/features/bookmarks/store/preferences-store";
-import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 import {
   toggleTagPin,
   updateTagColor,
@@ -51,7 +51,8 @@ export function NavTags() {
   const { data: tags, isLoading, mutate } = useTags();
   const { data: itemCounts } = useTagItemCounts();
   const { displaySidebarTagItemCounts } = usePreferencesStore();
-  const { tagFilter, setTagFilter } = useViewStore();
+  const [queryState, setQueryState] = useBookmarksQuery();
+  const tagFilter = queryState.tag;
   const { mutate: globalMutate } = useSWRConfig();
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -150,9 +151,12 @@ export function NavTags() {
                   itemCounts={itemCounts || {}}
                   displayCounts={displaySidebarTagItemCounts}
                   activeTagId={tagFilter}
-                  onTagClick={(tagId) =>
-                    setTagFilter(tagFilter === tagId ? null : tagId)
-                  }
+                  onTagClick={(tagId) => {
+                    setQueryState({
+                      tag: tagFilter === tagId ? null : tagId,
+                      page: 1,
+                    });
+                  }}
                   onEdit={(t) => {
                     setSelectedTag(t);
                     setEditDialogOpen(true);

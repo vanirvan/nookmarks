@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { RscBoundaryProvider } from "@rsc-boundary/next";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
@@ -40,7 +41,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <RscBoundaryProvider>
-            <TooltipProvider>{children}</TooltipProvider>
+            <TooltipProvider>
+              <NuqsAdapter>{children}</NuqsAdapter>
+            </TooltipProvider>
           </RscBoundaryProvider>
         </ThemeProvider>
       </body>

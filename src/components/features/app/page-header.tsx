@@ -9,6 +9,7 @@ import {
   Search,
   Table,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,6 +26,7 @@ import {
 } from "@/components/ui/input-group";
 import { getCollectionIcon } from "@/lib/collection-icons";
 import { cn } from "@/lib/utils";
+import { useBookmarksQuery } from "@/services/features/bookmarks/hooks/use-bookmarks-query";
 import { useViewStore } from "@/services/features/bookmarks/store/view-store";
 
 interface PageHeaderProps {
@@ -43,8 +45,53 @@ export function PageHeader({
   onAddClick,
 }: PageHeaderProps) {
   const Icon = getCollectionIcon(iconName || fallbackIconName || null);
-  const { view, setView, search, setSearch, sortBy, setSortBy } =
-    useViewStore();
+  const { view, setView } = useViewStore();
+  const [queryState, setQueryState] = useBookmarksQuery();
+  const searchVal = queryState.search;
+  const sortVal = queryState.sort;
+  const orderVal = queryState.order;
+
+  const [localSearch, setLocalSearch] = useState(searchVal);
+
+  useEffect(() => {
+    setLocalSearch(searchVal);
+  }, [searchVal]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearch !== searchVal) {
+        setQueryState({
+          search: localSearch || null,
+          page: 1,
+        });
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [localSearch, searchVal, setQueryState]);
+
+  const handleSortChange = (
+    sortByOption: "newest" | "oldest" | "a-z" | "z-a",
+  ) => {
+    if (sortByOption === "newest") {
+      setQueryState({ sort: "createdAt", order: "desc", page: 1 });
+    } else if (sortByOption === "oldest") {
+      setQueryState({ sort: "createdAt", order: "asc", page: 1 });
+    } else if (sortByOption === "a-z") {
+      setQueryState({ sort: "title", order: "asc", page: 1 });
+    } else if (sortByOption === "z-a") {
+      setQueryState({ sort: "title", order: "desc", page: 1 });
+    }
+  };
+
+  let activeSortBy = "newest";
+  if (sortVal === "createdAt" && orderVal === "asc") {
+    activeSortBy = "oldest";
+  } else if (sortVal === "title" && orderVal === "asc") {
+    activeSortBy = "a-z";
+  } else if (sortVal === "title" && orderVal === "desc") {
+    activeSortBy = "z-a";
+  }
 
   return (
     <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between mb-8">
@@ -67,8 +114,8 @@ export function PageHeader({
           </InputGroupAddon>
           <InputGroupInput
             placeholder="Search bookmarks..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={localSearch}
+            onChange={(e) => setLocalSearch(e.target.value)}
           />
         </InputGroup>
 
@@ -102,12 +149,14 @@ export function PageHeader({
               <DropdownMenuItem
                 key={option.id}
                 onClick={() =>
-                  setSortBy(option.id as "newest" | "oldest" | "a-z" | "z-a")
+                  handleSortChange(
+                    option.id as "newest" | "oldest" | "a-z" | "z-a",
+                  )
                 }
                 className="flex items-center justify-between"
               >
                 {option.label}
-                {sortBy === option.id && <Check className="h-4 w-4" />}
+                {activeSortBy === option.id && <Check className="h-4 w-4" />}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

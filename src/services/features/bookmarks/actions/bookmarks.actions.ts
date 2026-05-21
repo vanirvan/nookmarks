@@ -1,7 +1,18 @@
 "use server";
 
 import * as cheerio from "cheerio";
-import { and, eq, notExists, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  ilike,
+  inArray,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import {
@@ -159,74 +170,54 @@ export const createBookmark = createSafeAction(
 );
 
 export const getBookmarks = createSafeAction(
-  null,
-  async (
-    data: {
-      collectionId?: string | null;
-      tagId?: string | null;
-      includeNestedTags?: boolean;
-    },
-    session,
-  ) => {
-    const result = await db.query.bookmarks.findMany({
-      where: (bookmarks, { and, eq, exists, notExists }) => {
-        const conditions = [eq(bookmarks.userId, session.user.id)];
+  z.object({
+    collectionId: z.string().uuid().nullable().optional(),
+    tagId: z.string().nullable().optional(),
+    includeNestedTags: z.boolean().optional(),
+    search: z.string().optional(),
+    sort: z.enum(["createdAt", "title", "url"]).optional(),
+    order: z.enum(["asc", "desc"]).optional(),
+    page: z.number().int().positive().optional(),
+    limit: z.number().int().positive().optional(),
+  }),
+  async (data, session) => {
+    const conditions = [eq(bookmarks.userId, session.user.id)];
 
-        if (data.collectionId === null) {
-          conditions.push(
-            notExists(
-              db
-                .select()
-                .from(bookmarkCollections)
-                .where(eq(bookmarkCollections.bookmarkId, bookmarks.id)),
+    if (data.collectionId === null) {
+      conditions.push(
+        notExists(
+          db
+            .select()
+            .from(bookmarkCollections)
+            .where(eq(bookmarkCollections.bookmarkId, bookmarks.id)),
+        ),
+      );
+    } else if (data.collectionId) {
+      conditions.push(
+        exists(
+          db
+            .select()
+            .from(bookmarkCollections)
+            .where(
+              and(
+                eq(bookmarkCollections.bookmarkId, bookmarks.id),
+                eq(bookmarkCollections.collectionId, data.collectionId),
+              ),
             ),
-          );
-        } else if (data.collectionId) {
-          conditions.push(
-            exists(
-              db
-                .select()
-                .from(bookmarkCollections)
-                .where(
-                  and(
-                    eq(bookmarkCollections.bookmarkId, bookmarks.id),
-                    eq(bookmarkCollections.collectionId, data.collectionId),
-                  ),
-                ),
-            ),
-          );
-        }
+        ),
+      );
+    }
 
-        if (data.tagId === null) {
-          conditions.push(
-            notExists(
-              db
-                .select()
-                .from(bookmarkTags)
-                .where(eq(bookmarkTags.bookmarkId, bookmarks.id)),
-            ),
-          );
-        }
-
-        return and(...conditions);
-      },
-      with: {
-        bookmarkTags: {
-          with: {
-            tag: true,
-          },
-        },
-        bookmarkCollections: {
-          with: {
-            collection: true,
-          },
-        },
-      },
-      orderBy: (bookmarks, { desc }) => [desc(bookmarks.createdAt)],
-    });
-
-    let filtered = result;
-    if (data.tagId && data.tagId !== null) {
+    if (data.tagId === null) {
+      conditions.push(
+        notExists(
+          db
+            .select()
+            .from(bookmarkTags)
+            .where(eq(bookmarkTags.bookmarkId, bookmarks.id)),
+        ),
+      );
+    } else if (data.tagId) {
       if (data.includeNestedTags) {
         const allTags = await db.query.tags.findMany({
           where: eq(tags.userId, session.user.id),
@@ -255,22 +246,122 @@ export const getBookmarks = createSafeAction(
           })
           .map((t) => t.id);
 
-        filtered = result.filter((bookmark) =>
-          bookmark.bookmarkTags.some((bt) =>
-            descendantTagIds.includes(bt.tagId),
-          ),
-        );
+        if (descendantTagIds.length > 0) {
+          conditions.push(
+            exists(
+              db
+                .select()
+                .from(bookmarkTags)
+                .where(
+                  and(
+                    eq(bookmarkTags.bookmarkId, bookmarks.id),
+                    inArray(bookmarkTags.tagId, descendantTagIds),
+                  ),
+                ),
+            ),
+          );
+        }
       } else {
-        filtered = result.filter((bookmark) =>
-          bookmark.bookmarkTags.some((bt) => bt.tagId === data.tagId),
+        conditions.push(
+          exists(
+            db
+              .select()
+              .from(bookmarkTags)
+              .where(
+                and(
+                  eq(bookmarkTags.bookmarkId, bookmarks.id),
+                  eq(bookmarkTags.tagId, data.tagId),
+                ),
+              ),
+          ),
         );
       }
     }
 
-    return filtered.map((item) => ({
+    if (data.search) {
+      const searchPattern = `%${data.search}%`;
+      const searchCondition = or(
+        ilike(bookmarks.url, searchPattern),
+        ilike(bookmarks.description, searchPattern),
+        exists(
+          db
+            .select()
+            .from(bookmarkTags)
+            .innerJoin(tags, eq(bookmarkTags.tagId, tags.id))
+            .where(
+              and(
+                eq(bookmarkTags.bookmarkId, bookmarks.id),
+                ilike(tags.title, searchPattern),
+              ),
+            ),
+        ),
+      );
+      if (searchCondition) {
+        conditions.push(searchCondition);
+      }
+    }
+
+    // 1. Get total count
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(bookmarks)
+      .where(and(...conditions));
+
+    const totalCount = Number(countResult?.count || 0);
+
+    // 2. Sort column & order
+    const sortColumn = data.sort || "createdAt";
+    const sortOrder = data.order || "desc";
+
+    let orderByClause = desc(bookmarks.createdAt);
+    if (sortColumn === "title") {
+      orderByClause =
+        sortOrder === "asc"
+          ? asc(bookmarks.description)
+          : desc(bookmarks.description);
+    } else if (sortColumn === "url") {
+      orderByClause =
+        sortOrder === "asc" ? asc(bookmarks.url) : desc(bookmarks.url);
+    } else {
+      orderByClause =
+        sortOrder === "asc"
+          ? asc(bookmarks.createdAt)
+          : desc(bookmarks.createdAt);
+    }
+
+    // 3. Paginated query
+    const page = data.page || 1;
+    const limit = data.limit || 10;
+    const offset = (page - 1) * limit;
+
+    const result = await db.query.bookmarks.findMany({
+      where: and(...conditions),
+      with: {
+        bookmarkTags: {
+          with: {
+            tag: true,
+          },
+        },
+        bookmarkCollections: {
+          with: {
+            collection: true,
+          },
+        },
+      },
+      orderBy: [orderByClause],
+      limit: limit,
+      offset: offset,
+    });
+
+    const mappedBookmarks = result.map((item) => ({
       ...item,
       aiMetadata: (item.aiMetadata as Record<string, unknown>) || {},
     }));
+
+    return {
+      bookmarks: mappedBookmarks,
+      totalCount,
+    };
   },
 );
 
