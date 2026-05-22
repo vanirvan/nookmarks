@@ -1,7 +1,6 @@
 "use client";
 
 import { ChevronRight, Globe, Info, UploadCloud, User } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   Dialog,
@@ -10,6 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useSettingsStore } from "@/services/features/settings/store/settings-store";
 import { AboutTab } from "./about-tab";
 import { AuthTab } from "./auth-tab";
 import { ImportTab } from "./import-tab";
@@ -31,11 +31,8 @@ const TABS: TabItem[] = [
 ];
 
 export function SettingsDialog() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
+  const { isOpen, setIsOpen } = useSettingsStore();
   const [activeTab, setActiveTab] = useState<SettingsTab>("auth");
-
-  const isOpen = searchParams?.get("settings") === "true";
 
   useEffect(() => {
     if (isOpen) {
@@ -45,16 +42,7 @@ export function SettingsDialog() {
   }, [isOpen]);
 
   const handleOpenChange = (open: boolean) => {
-    if (!open) {
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        params.delete("settings");
-        const cleanedSearch = params.toString();
-        const newUrl =
-          window.location.pathname + (cleanedSearch ? `?${cleanedSearch}` : "");
-        router.push(newUrl);
-      }
-    }
+    setIsOpen(open);
   };
 
   const renderActiveTabContent = () => {

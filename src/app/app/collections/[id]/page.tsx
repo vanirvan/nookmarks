@@ -1,8 +1,8 @@
 "use client";
 
-import { useCollections } from "@/services/features/collections/hooks/use-collections";
+import { Suspense, use } from "react";
 import { BookmarkPage } from "@/components/features/bookmarks/bookmark-page";
-import { use } from "react";
+import { useCollections } from "@/services/features/collections/hooks/use-collections";
 
 export default function CollectionPage({
   params,
@@ -14,16 +14,18 @@ export default function CollectionPage({
   const collection = collections?.find((c) => c.id === id);
 
   return (
-    <BookmarkPage
-      title={collection?.name ?? "Collection"}
-      description={
-        collection
-          ? `Viewing bookmarks in ${collection.name}.`
-          : "Viewing bookmarks in this collection."
-      }
-      iconName={collection?.icon}
-      fallbackIconName="Folder"
-      collectionId={id}
-    />
+    <Suspense fallback={null}>
+      <BookmarkPage
+        title={collection?.name ?? "Collection"}
+        description={
+          collection
+            ? `Viewing bookmarks in ${collection.name}.`
+            : "Viewing bookmarks in this collection."
+        }
+        iconName={collection?.icon}
+        fallbackIconName="Folder"
+        collectionId={id}
+      />
+    </Suspense>
   );
 }

@@ -24,7 +24,6 @@ import {
   userApiKeys,
 } from "@/lib/db/schema";
 import { createSafeAction } from "@/lib/safe-action";
-import { deleteFile } from "@/lib/server/s3.server";
 import {
   checkDuplicateUrlSchema,
   createBookmarkSchema,
@@ -112,17 +111,41 @@ export const createBookmark = createSafeAction(
             extractedDescription: "",
             favicon: "",
             ogImage: "",
+            customDescription: validatedData.customDescription || "",
           },
         })
         .returning();
 
       if (validatedData.type === "bookmark" && validatedData.url) {
-        // Auto-fetch metadata for URL bookmarks (fire and forget)
-        void fetchAndUpdateBookmarkMetadata({
-          bookmarkId: newBookmark.id,
-        }).catch((err) => {
-          console.error("Failed to fetch metadata:", err);
-        });
+        if (needsAI) {
+          // Trigger the Hono background worker webhook (fire-and-forget)
+          const workerUrl =
+            process.env.AI_WORKER_URL || "http://localhost:3001";
+          void fetch(`${workerUrl}/process-bookmark`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              bookmarkId: newBookmark.id,
+              userId: session.user.id,
+              needsAI: true,
+            }),
+          }).catch((err) => {
+            console.error(
+              "Failed to trigger AI background worker webhook:",
+              err,
+            );
+          });
+        } else {
+          // Auto-fetch metadata for URL bookmarks (fire and forget)
+          void fetchAndUpdateBookmarkMetadataInternal(
+            newBookmark.id,
+            session.user.id,
+          ).catch((err) => {
+            console.error("Failed to fetch metadata:", err);
+          });
+        }
       }
 
       if (validatedData.tags && validatedData.tags.length > 0) {
@@ -397,11 +420,6 @@ export const deleteBookmark = createSafeAction(
           ),
         );
 
-      // Delete image from R2 if it exists
-      if (bookmark.type === "image" && bookmark.imagePath) {
-        await deleteFile(bookmark.imagePath);
-      }
-
       return { success: true };
     });
   },
@@ -505,6 +523,13 @@ export const updateBookmark = createSafeAction(
 
       if (!existingBookmark) throw new Error("Bookmark not found");
 
+      const existingAiMetadata =
+        (existingBookmark.aiMetadata as Record<string, any>) || {};
+      const aiMetadata = {
+        ...existingAiMetadata,
+        customDescription: validatedData.customDescription,
+      };
+
       const [updatedBookmark] = await tx
         .update(bookmarks)
         .set({
@@ -513,6 +538,7 @@ export const updateBookmark = createSafeAction(
             validatedData.type === "image" ? validatedData.imagePath : null,
           description: validatedData.description,
           comments: validatedData.comments,
+          aiMetadata: aiMetadata,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(bookmarks.id, validatedData.id))
@@ -560,10 +586,6 @@ export const updateBookmark = createSafeAction(
             collectionId,
           })),
         );
-      }
-
-      if (validatedData.forceRefetchImage && existingBookmark.imagePath) {
-        await deleteFile(existingBookmark.imagePath);
       }
 
       return {
@@ -764,85 +786,109 @@ export const fetchUrlMetadata = createSafeAction(
   },
 );
 
+// Helper: Fetch and update bookmark metadata (internal async helper)
+export async function fetchAndUpdateBookmarkMetadataInternal(
+  bookmarkId: string,
+  userId: string,
+) {
+  // Get bookmark
+  const bookmark = await db.query.bookmarks.findFirst({
+    where: and(eq(bookmarks.id, bookmarkId), eq(bookmarks.userId, userId)),
+  });
+
+  if (!bookmark || !bookmark.url) {
+    throw new Error("Bookmark not found or has no URL");
+  }
+
+  try {
+    // Set status to pending
+    await db
+      .update(bookmarks)
+      .set({
+        aiStatus: "pending",
+      })
+      .where(eq(bookmarks.id, bookmarkId));
+
+    // Fetch metadata
+    const metadataResult = await fetchUrlMetadata({ url: bookmark.url });
+
+    if (!metadataResult.success) {
+      throw new Error(metadataResult.error || "Failed to fetch metadata");
+    }
+
+    const metadata = metadataResult.data;
+
+    // Get latest to merge aiMetadata
+    const latestBookmark = await db.query.bookmarks.findFirst({
+      where: eq(bookmarks.id, bookmarkId),
+    });
+    const existingAiMetadata =
+      (latestBookmark?.aiMetadata as Record<string, any>) || {};
+
+    const aiMetadata = {
+      ...existingAiMetadata,
+      extractedTitle: metadata.title,
+      extractedDescription: metadata.description,
+      favicon: metadata.favicon,
+      ogImage: metadata.image,
+      fetchedAt: new Date().toISOString(),
+    };
+
+    // Update bookmark with metadata and status to completed
+    const [updated] = await db
+      .update(bookmarks)
+      .set({
+        aiStatus: "completed",
+        aiMetadata: aiMetadata,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(bookmarks.id, bookmarkId))
+      .returning();
+
+    return updated;
+  } catch (error) {
+    // Store error in metadata and set status to failed
+    const errorMsg = error instanceof Error ? error.message : String(error);
+
+    const latestBookmark = await db.query.bookmarks.findFirst({
+      where: eq(bookmarks.id, bookmarkId),
+    });
+    const existingAiMetadata =
+      (latestBookmark?.aiMetadata as Record<string, any>) || {};
+
+    const aiMetadata = {
+      ...existingAiMetadata,
+      extractedTitle: existingAiMetadata.extractedTitle || "",
+      extractedDescription: existingAiMetadata.extractedDescription || "",
+      favicon: existingAiMetadata.favicon || "",
+      ogImage: existingAiMetadata.ogImage || "",
+      fetchedAt: new Date().toISOString(),
+      fetchError: errorMsg,
+    };
+
+    const [updated] = await db
+      .update(bookmarks)
+      .set({
+        aiStatus: "failed",
+        aiError: errorMsg,
+        aiMetadata: aiMetadata,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(bookmarks.id, bookmarkId))
+      .returning();
+
+    return updated;
+  }
+}
+
 // Helper: Fetch and update bookmark metadata
 export const fetchAndUpdateBookmarkMetadata = createSafeAction(
   z.object({ bookmarkId: z.string().uuid() }),
   async (validatedData, session) => {
-    const { bookmarkId } = validatedData;
-
-    // Get bookmark
-    const bookmark = await db.query.bookmarks.findFirst({
-      where: and(
-        eq(bookmarks.id, bookmarkId),
-        eq(bookmarks.userId, session.user.id),
-      ),
-    });
-
-    if (!bookmark || !bookmark.url) {
-      throw new Error("Bookmark not found or has no URL");
-    }
-
-    try {
-      // Set status to pending
-      await db
-        .update(bookmarks)
-        .set({
-          aiStatus: "pending",
-        })
-        .where(eq(bookmarks.id, bookmarkId));
-
-      // Fetch metadata
-      const metadataResult = await fetchUrlMetadata({ url: bookmark.url });
-
-      if (!metadataResult.success) {
-        throw new Error(metadataResult.error || "Failed to fetch metadata");
-      }
-
-      const metadata = metadataResult.data;
-
-      const aiMetadata = {
-        extractedTitle: metadata.title,
-        extractedDescription: metadata.description,
-        favicon: metadata.favicon,
-        ogImage: metadata.image,
-        fetchedAt: new Date().toISOString(),
-      };
-
-      // Update bookmark with metadata and status to completed
-      const [updated] = await db
-        .update(bookmarks)
-        .set({
-          aiStatus: "completed",
-          aiMetadata: aiMetadata,
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(bookmarks.id, bookmarkId))
-        .returning();
-
-      return updated;
-    } catch (error) {
-      // Store error in metadata and set status to failed
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      const [updated] = await db
-        .update(bookmarks)
-        .set({
-          aiStatus: "failed",
-          aiError: errorMsg,
-          aiMetadata: {
-            extractedTitle: "",
-            extractedDescription: "",
-            favicon: "",
-            ogImage: "",
-            fetchedAt: new Date().toISOString(),
-            fetchError: errorMsg,
-          },
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(bookmarks.id, bookmarkId))
-        .returning();
-
-      return updated;
-    }
+    return await fetchAndUpdateBookmarkMetadataInternal(
+      validatedData.bookmarkId,
+      session.user.id,
+    );
   },
 );
 
@@ -874,20 +920,14 @@ export const bulkRefetchMetadata = createSafeAction(
       const batch = bookmarksToRefetch.slice(i, i + concurrency);
       const batchResults = await Promise.allSettled(
         batch.map((bookmark) =>
-          fetchAndUpdateBookmarkMetadata({ bookmarkId: bookmark.id }),
+          fetchAndUpdateBookmarkMetadataInternal(bookmark.id, session.user.id),
         ),
       );
       results.push(...batchResults);
     }
 
-    const successful = results.filter(
-      (r) => r.status === "fulfilled" && r.value.success,
-    ).length;
-    const failed = results.filter(
-      (r) =>
-        r.status === "rejected" ||
-        (r.status === "fulfilled" && !r.value.success),
-    ).length;
+    const successful = results.filter((r) => r.status === "fulfilled").length;
+    const failed = results.filter((r) => r.status === "rejected").length;
 
     return {
       total: bookmarksToRefetch.length,
@@ -961,17 +1001,6 @@ export const bulkDeleteBookmarks = createSafeAction(
             sql`${bookmarks.id} IN ${verifiedIds}`,
           ),
         );
-
-      // Delete images from R2 if any
-      for (const b of targetBookmarks) {
-        if (b.type === "image" && b.imagePath) {
-          try {
-            await deleteFile(b.imagePath);
-          } catch (err) {
-            console.error(`Failed to delete file ${b.imagePath}:`, err);
-          }
-        }
-      }
 
       return { success: true, count: verifiedIds.length };
     });

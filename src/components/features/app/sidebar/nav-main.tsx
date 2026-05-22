@@ -1,6 +1,6 @@
 "use client";
 
-import { Inbox, LayoutDashboard, Tag } from "lucide-react";
+import { Inbox, LayoutDashboard } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -15,7 +15,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   useAllBookmarksCount,
   useUnsortedBookmarksCount,
-  useUntaggedBookmarksCount,
 } from "@/services/features/bookmarks/hooks/use-bookmarks-count";
 import { useBookmarksQuery } from "@/services/features/bookmarks/hooks/use-bookmarks-query";
 
@@ -23,19 +22,10 @@ export function NavMain() {
   const { data: allCount, isLoading: isLoadingAll } = useAllBookmarksCount();
   const { data: unsortedCount, isLoading: isLoadingUnsorted } =
     useUnsortedBookmarksCount();
-  const { data: untaggedCount, isLoading: isLoadingUntagged } =
-    useUntaggedBookmarksCount();
 
   const pathname = usePathname();
-  const [queryState, setQueryState] = useBookmarksQuery();
+  const [queryState] = useBookmarksQuery();
   const tagFilter = queryState.tag;
-
-  const handleUntaggedClick = () => {
-    setQueryState({
-      tag: tagFilter === "untagged" ? null : "untagged",
-      page: 1,
-    });
-  };
 
   return (
     <SidebarGroup>
@@ -73,24 +63,9 @@ export function NavMain() {
               )}
             </SidebarMenuBadge>
           </SidebarMenuItem>
-          <SidebarMenuItem>
-            <SidebarMenuButton
-              onClick={handleUntaggedClick}
-              isActive={tagFilter === "untagged"}
-            >
-              <Tag />
-              <span>Untagged</span>
-            </SidebarMenuButton>
-            <SidebarMenuBadge>
-              {isLoadingUntagged ? (
-                <Skeleton className="size-4 rounded-md" />
-              ) : (
-                (untaggedCount ?? 0)
-              )}
-            </SidebarMenuBadge>
-          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarGroupContent>
     </SidebarGroup>
   );
 }
+

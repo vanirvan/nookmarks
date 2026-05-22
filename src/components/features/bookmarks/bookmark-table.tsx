@@ -36,7 +36,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getFileUrl } from "@/lib/server/s3.server";
 import { cn } from "@/lib/utils";
 import { useBookmarksQuery } from "@/services/features/bookmarks/hooks/use-bookmarks-query";
 import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
@@ -88,8 +87,7 @@ function BookmarkImageCell({ bookmark }: { bookmark: Bookmark }) {
   const [imageDialogOpen, setImageDialogOpen] = useState(false);
   const [faviconError, setFaviconError] = useState(false);
   const isImage = bookmark.type === "image";
-  const imageUrl =
-    isImage && bookmark.imagePath ? getFileUrl(bookmark.imagePath) : null;
+  const imageUrl = isImage && bookmark.imagePath ? bookmark.imagePath : null;
   const metadata = (bookmark.aiMetadata || {}) as Record<string, string>;
   const favicon = metadata.favicon || "";
   const ogImage = metadata.ogImage || "";
@@ -175,21 +173,28 @@ function BookmarkActionsCell({ bookmark }: { bookmark: Bookmark }) {
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
-            <Button variant="ghost" size="icon-sm" className="h-7 w-7 p-0" />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-7 w-7 p-0 flex items-center justify-center"
+            />
           }
         >
           <MoreHorizontal className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
-            <Pencil className="mr-2 h-4 w-4" /> Edit
+          <DropdownMenuItem
+            onClick={() => setEditDialogOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Pencil className="h-4 w-4" /> Edit
           </DropdownMenuItem>
           <DropdownMenuItem
             variant="destructive"
-            className="text-destructive focus:text-destructive"
+            className="text-destructive focus:text-destructive flex items-center gap-2"
             onClick={() => setDeleteDialogOpen(true)}
           >
-            <Trash2 className="mr-2 h-4 w-4 text-destructive" /> Delete
+            <Trash2 className="h-4 w-4 text-destructive" /> Delete
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -360,8 +365,8 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
             string
           >;
           const title =
-            metadata.extractedTitle ||
             bookmark.description ||
+            metadata.extractedTitle ||
             bookmark.url ||
             "";
           const isLoadingMetadata = bookmark.aiStatus === "pending";
@@ -457,9 +462,12 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
             string
           >;
           const description =
-            metadata.extractedDescription || bookmark.description || "";
+            metadata.customDescription ||
+            metadata.aiSummary ||
+            metadata.extractedDescription ||
+            "";
           return description ? (
-            <span className="text-xs text-muted-foreground line-clamp-2 max-w-[280px]">
+            <span className="text-xs text-muted-foreground line-clamp-2 max-w-[280px] break-all">
               {description}
             </span>
           ) : (
@@ -475,7 +483,7 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
         cell: ({ row }) => {
           const comments = row.original.comments || "";
           return comments ? (
-            <span className="text-xs text-foreground font-medium line-clamp-2 max-w-[280px] bg-yellow-500/10 dark:bg-yellow-500/5 border border-yellow-500/20 px-2.5 py-1 rounded-lg block">
+            <span className="text-xs text-foreground font-medium line-clamp-2 max-w-[280px] bg-yellow-500/10 dark:bg-yellow-500/5 border border-yellow-500/20 px-2.5 py-1 rounded-lg block break-all">
               {comments}
             </span>
           ) : (

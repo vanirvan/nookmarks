@@ -20,11 +20,13 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { authClient } from "@/lib/auth/auth.client";
+import { useSettingsStore } from "@/services/features/settings/store/settings-store";
 
 export function NavUser() {
   const router = useRouter();
   const { isMobile } = useSidebar();
   const { signOut, useSession } = authClient;
+  const { openSettings } = useSettingsStore();
 
   const { data: session, isPending } = useSession();
   const user = session?.user;
@@ -106,13 +108,17 @@ export function NavUser() {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem onClick={() => router.push("?settings=true")}>
-                  <SettingsIcon className="mr-2 h-4 w-4" />
-                  Settings
+                <DropdownMenuItem onClick={() => openSettings()}>
+                  <div className="flex items-center gap-2">
+                    <SettingsIcon className="h-4 w-4" />
+                    <span>Settings</span>
+                  </div>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={handleSignOut}>
-                  <LogOutIcon className="mr-2 h-4 w-4" />
-                  Log out
+                  <div className="flex items-center gap-2">
+                    <LogOutIcon className="h-4 w-4" />
+                    <span>Log out</span>
+                  </div>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
             </DropdownMenuContent>

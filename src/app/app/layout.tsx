@@ -14,9 +14,13 @@ export default async function AppLayout({
       <SidebarProvider className="flex flex-col">
         <SiteHeader />
         <div className="flex flex-1">
-          <AppSidebar />
+          <Suspense fallback={null}>
+            <AppSidebar />
+          </Suspense>
           <SidebarInset>
-            <div className="flex flex-1 flex-col gap-4 p-4">{children}</div>
+            <div className="flex flex-1 flex-col gap-4 p-4">
+              <Suspense fallback={null}>{children}</Suspense>
+            </div>
           </SidebarInset>
         </div>
         <Suspense fallback={null}>

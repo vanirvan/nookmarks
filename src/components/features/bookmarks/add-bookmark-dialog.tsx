@@ -32,6 +32,7 @@ const schema = z.object({
   type: z.literal("bookmark"),
   url: z.url("Please enter a valid URL"),
   description: z.string().optional().nullable(),
+  customDescription: z.string().optional().nullable(),
   comments: z.string().optional().nullable(),
   tags: z.array(z.string()),
   collectionIds: z.array(z.string().uuid()),
@@ -69,6 +70,7 @@ export function AddBookmarkDialog({
       type: "bookmark" as const,
       url: "",
       description: "",
+      customDescription: "",
       comments: "",
       tags: [],
       collectionIds: [],
@@ -81,6 +83,7 @@ export function AddBookmarkDialog({
         type: "bookmark" as const,
         url: "",
         description: "",
+        customDescription: "",
         comments: "",
         tags: [],
         collectionIds: [],
@@ -144,6 +147,12 @@ export function AddBookmarkDialog({
               if (result.success && result.data) {
                 if (result.data.title && !form.getValues("description")) {
                   form.setValue("description", result.data.title);
+                }
+                if (
+                  result.data.description &&
+                  !form.getValues("customDescription")
+                ) {
+                  form.setValue("customDescription", result.data.description);
                 }
               }
             } catch (error) {
@@ -267,12 +276,21 @@ export function AddBookmarkDialog({
           )}
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
+            <Label htmlFor="description">Title / Custom Title</Label>
+            <Input
               id="description"
+              placeholder="Add a custom title..."
+              {...form.register("description")}
+            />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="customDescription">Description</Label>
+            <Textarea
+              id="customDescription"
               rows={3}
               placeholder="Add a description..."
-              {...form.register("description")}
+              {...form.register("customDescription")}
             />
           </div>
 
