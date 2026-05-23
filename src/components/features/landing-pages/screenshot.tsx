@@ -1,8 +1,10 @@
 "use client";
 
 import { motion, useMotionValueEvent, useScroll } from "motion/react";
+import Image from "next/image";
 import { useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import heroImage from "../../../../public/assets/hero.webp";
 
 export function Screenshot() {
   const sectionRef = useRef(null);
@@ -10,7 +12,7 @@ export function Screenshot() {
 
   const { scrollYProgress } = useScroll({
     target: sectionRef,
-    offset: ["50% end", "end start"],
+    offset: ["80% end", "end start"],
   });
 
   useMotionValueEvent(scrollYProgress, "change", (latest) => {
@@ -28,10 +30,18 @@ export function Screenshot() {
           layout
           transition={{ type: "spring", bounce: 0.2, duration: 0.8 }}
           className={cn(
-            "bg-primary w-full mx-auto rounded-md aspect-video",
+            "w-full mx-auto rounded-xl aspect-video relative overflow-hidden border border-border shadow-2xl",
             isShrunk ? "max-w-5xl" : "max-w-7xl",
           )}
-        ></motion.div>
+        >
+          <Image
+            src={heroImage}
+            alt="Nookmarks Premium Dashboard Screenshot"
+            fill
+            unoptimized
+            className="object-cover object-top"
+          />
+        </motion.div>
       </div>
     </section>
   );
