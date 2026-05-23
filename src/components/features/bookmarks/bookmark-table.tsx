@@ -11,7 +11,6 @@ import { formatDistanceToNow } from "date-fns";
 import {
   ArrowUpDown,
   ExternalLink,
-  Loader2,
   MoreHorizontal,
   Pencil,
   Settings2,
@@ -63,8 +62,6 @@ type Bookmark = {
   description: string | null;
   comments?: string | null;
   title?: string | null;
-  aiStatus: string | null;
-  aiError: string | null;
   aiMetadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -364,18 +361,10 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
             string,
             string
           >;
-          const title =
-            bookmark.description ||
-            metadata.extractedTitle ||
-            bookmark.url ||
-            "";
-          const isLoadingMetadata = bookmark.aiStatus === "pending";
+          const title = metadata.extractedTitle || bookmark.url || "";
 
           return (
             <div className="flex items-center gap-2 max-w-[240px] lg:max-w-[320px]">
-              {isLoadingMetadata && (
-                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary shrink-0" />
-              )}
               {bookmark.url ? (
                 <a
                   href={bookmark.url}
@@ -462,10 +451,7 @@ export function BookmarkTable({ bookmarks }: BookmarkTableProps) {
             string
           >;
           const description =
-            metadata.customDescription ||
-            metadata.aiSummary ||
-            metadata.extractedDescription ||
-            "";
+            bookmark.description || metadata.extractedDescription || "";
           return description ? (
             <span className="text-xs text-muted-foreground line-clamp-2 max-w-[280px] break-all">
               {description}

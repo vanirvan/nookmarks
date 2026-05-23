@@ -1,9 +1,7 @@
 "use client";
 
 import {
-  AlertCircle,
   ExternalLink,
-  Loader2,
   Maximize2,
   MessageSquare,
   MoreHorizontal,
@@ -20,7 +18,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useSelectionStore } from "@/services/features/bookmarks/store/selection-store";
 import { DeleteBookmarkDialog } from "./delete-bookmark-dialog";
@@ -46,8 +43,6 @@ type Bookmark = {
   description: string | null;
   comments?: string | null;
   title?: string | null;
-  aiStatus: string | null;
-  aiError: string | null;
   aiMetadata?: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -79,16 +74,16 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
   const imageUrl = isImage && bookmark.imagePath ? bookmark.imagePath : null;
   const tags = bookmark.bookmarkTags || [];
   const metadata = (bookmark.aiMetadata || {}) as Record<string, string>;
-  const title =
-    bookmark.description || metadata.extractedTitle || bookmark.url || "";
+
+  // Prioritize webpage title for Card Title, fallback to URL
+  const title = metadata.extractedTitle || bookmark.url || "";
+
+  // Prioritize user's manual description for Card Description, fallback to scraped description
   const description =
-    metadata.customDescription ||
-    metadata.aiSummary ||
-    metadata.extractedDescription ||
-    "";
+    bookmark.description || metadata.extractedDescription || "";
+
   const favicon = metadata.favicon || "";
   const ogImage = metadata.ogImage || "";
-  const isLoadingMetadata = bookmark.aiStatus === "pending";
 
   let domain = "";
   try {
@@ -121,14 +116,7 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
             onCheckedChange={() => toggleSelection(bookmark.id)}
           />
         </div>
-        {isLoadingMetadata ? (
-          <div className="h-12 w-12 rounded-lg overflow-hidden shrink-0 relative border">
-            <Skeleton className="absolute inset-0" />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            </div>
-          </div>
-        ) : isImage ? (
+        {isImage ? (
           <button
             type="button"
             className="h-12 w-12 rounded-lg overflow-hidden bg-muted shrink-0 cursor-zoom-in relative text-left"
@@ -186,58 +174,40 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
           </div>
         )}
 
-        {isLoadingMetadata ? (
-          <div className="flex-1 min-w-0 flex flex-col gap-1.5">
-            <Skeleton className="h-4 w-48" />
-            <p className="text-xs text-muted-foreground truncate">
-              {bookmark.url || "Image Bookmark"}
-            </p>
+        <div className="flex-1 min-w-0 flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <h3 className="font-medium truncate leading-none">{title}</h3>
+            {tags.length > 0 && (
+              <div className="flex gap-1 overflow-hidden shrink-0">
+                {tags.slice(0, 2).map((tag) => (
+                  <span
+                    key={tag.tag.id}
+                    className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground border shrink-0"
+                  >
+                    {tag.tag.title}
+                  </span>
+                ))}
+                {tags.length > 2 && (
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    +{tags.length - 2}
+                  </span>
+                )}
+              </div>
+            )}
+            {bookmark.comments && (
+              <span
+                className="inline-flex items-center gap-1 text-[10px] font-medium text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded-full shrink-0"
+                title={bookmark.comments}
+              >
+                <MessageSquare className="h-2.5 w-2.5" />
+                <span>Note</span>
+              </span>
+            )}
           </div>
-        ) : (
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="font-medium truncate leading-none">{title}</h3>
-              {bookmark.aiStatus === "failed" && (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-medium text-red-600 dark:text-red-400 bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full shrink-0 cursor-help"
-                  title={bookmark.aiError || "AI processing failed"}
-                >
-                  <AlertCircle className="h-2.5 w-2.5" />
-                  <span>AI Failed</span>
-                </span>
-              )}
-              {tags.length > 0 && (
-                <div className="flex gap-1 overflow-hidden shrink-0">
-                  {tags.slice(0, 2).map((tag) => (
-                    <span
-                      key={tag.tag.id}
-                      className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground border shrink-0"
-                    >
-                      {tag.tag.title}
-                    </span>
-                  ))}
-                  {tags.length > 2 && (
-                    <span className="text-[10px] text-muted-foreground shrink-0">
-                      +{tags.length - 2}
-                    </span>
-                  )}
-                </div>
-              )}
-              {bookmark.comments && (
-                <span
-                  className="inline-flex items-center gap-1 text-[10px] font-medium text-yellow-600 dark:text-yellow-400 bg-yellow-500/10 border border-yellow-500/20 px-1.5 py-0.5 rounded-full shrink-0"
-                  title={bookmark.comments}
-                >
-                  <MessageSquare className="h-2.5 w-2.5" />
-                  <span>Note</span>
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-muted-foreground truncate">
-              {bookmark.url || "Image Bookmark"}
-            </p>
-          </div>
-        )}
+          <p className="text-xs text-muted-foreground truncate">
+            {bookmark.url || "Image Bookmark"}
+          </p>
+        </div>
 
         <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
           <DropdownMenu>
@@ -312,22 +282,8 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
           />
         </div>
       </div>
-      {bookmark.aiStatus === "failed" && (
-        <div
-          className="absolute top-2 right-2 z-10 flex h-5 gap-1 items-center px-1.5 py-0.5 rounded-full bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 backdrop-blur-xs text-[10px] font-medium shadow-xs cursor-help"
-          title={bookmark.aiError || "AI processing failed"}
-        >
-          <AlertCircle className="h-2.5 w-2.5" />
-          <span>AI Failed</span>
-        </div>
-      )}
       <div className="relative">
-        {isLoadingMetadata ? (
-          <div className="aspect-4/3 bg-muted relative overflow-hidden border-b flex items-center justify-center">
-            <Skeleton className="absolute inset-0 rounded-none" />
-            <Loader2 className="h-8 w-8 animate-spin text-primary relative z-10" />
-          </div>
-        ) : isImage ? (
+        {isImage ? (
           <button
             type="button"
             className="aspect-4/3 bg-muted relative cursor-zoom-in overflow-hidden w-full text-left"
@@ -413,104 +369,80 @@ export function BookmarkCard({ bookmark, view }: BookmarkCardProps) {
         )}
       </div>
 
-      {isLoadingMetadata ? (
-        <>
-          <div className="px-3 pt-2 flex flex-col gap-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3" />
-          </div>
+      <div className="px-3 pt-1">
+        <h3 className="font-medium text-sm line-clamp-2">{title}</h3>
+      </div>
 
-          <div className="px-3 flex flex-col gap-1.5">
-            <Skeleton className="h-3 w-full" />
-            <Skeleton className="h-3 w-4/5" />
-          </div>
+      <div className="px-3">
+        <p className="text-xs text-muted-foreground line-clamp-2 break-all">
+          {description || "Image Bookmark"}
+        </p>
+      </div>
 
-          <div className="px-3 pb-3 mt-auto pt-1 flex items-center justify-between gap-2">
-            <div className="flex gap-1 flex-1">
-              <Skeleton className="h-4 w-12 rounded-full" />
-              <Skeleton className="h-4 w-16 rounded-full" />
-            </div>
-            <Skeleton className="h-7 w-7 rounded-lg" />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="px-3 pt-1">
-            <h3 className="font-medium text-sm line-clamp-2">{title}</h3>
-          </div>
-
-          <div className="px-3">
-            <p className="text-xs text-muted-foreground line-clamp-2 break-all">
-              {description || "Image Bookmark"}
+      {bookmark.comments && (
+        <div className="px-3">
+          <div className="flex items-start gap-1.5 text-[11px] text-yellow-800 dark:text-yellow-200 bg-yellow-500/10 dark:bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-2 group/comment hover:bg-yellow-500/15 transition-colors">
+            <MessageSquare className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
+            <p
+              className="line-clamp-2 italic break-all"
+              title={bookmark.comments}
+            >
+              {bookmark.comments}
             </p>
           </div>
-
-          {bookmark.comments && (
-            <div className="px-3">
-              <div className="flex items-start gap-1.5 text-[11px] text-yellow-800 dark:text-yellow-200 bg-yellow-500/10 dark:bg-yellow-500/5 border border-yellow-500/20 rounded-lg p-2 group/comment hover:bg-yellow-500/15 transition-colors">
-                <MessageSquare className="h-3.5 w-3.5 shrink-0 text-yellow-600 dark:text-yellow-400" />
-                <p
-                  className="line-clamp-2 italic break-all"
-                  title={bookmark.comments}
-                >
-                  {bookmark.comments}
-                </p>
-              </div>
-            </div>
-          )}
-
-          <div className="px-3 pb-3 mt-auto pt-1 flex items-center justify-between gap-2">
-            {tags.length > 0 ? (
-              <div className="flex flex-wrap gap-1 flex-1 min-w-0">
-                {tags.slice(0, 3).map((tag) => (
-                  <span
-                    key={tag.tag.id}
-                    className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground border"
-                  >
-                    {tag.tag.title}
-                  </span>
-                ))}
-                {tags.length > 3 && (
-                  <span className="text-[10px] text-muted-foreground">
-                    +{tags.length - 3}
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="flex-1" />
-            )}
-
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="h-7 w-7 p-0 flex items-center justify-center"
-                  />
-                }
-              >
-                <MoreHorizontal className="h-3 w-3" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem
-                  onClick={() => setEditDialogOpen(true)}
-                  className="flex items-center gap-2"
-                >
-                  <Pencil className="h-4 w-4" /> Edit
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  variant="destructive"
-                  className="text-destructive focus:text-destructive flex items-center gap-2"
-                  onClick={() => setDeleteDialogOpen(true)}
-                >
-                  <Trash2 className="h-4 w-4 text-destructive" /> Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </>
+        </div>
       )}
+
+      <div className="px-3 pb-3 mt-auto pt-1 flex items-center justify-between gap-2">
+        {tags.length > 0 ? (
+          <div className="flex flex-wrap gap-1 flex-1 min-w-0">
+            {tags.slice(0, 3).map((tag) => (
+              <span
+                key={tag.tag.id}
+                className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-secondary text-secondary-foreground border"
+              >
+                {tag.tag.title}
+              </span>
+            ))}
+            {tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">
+                +{tags.length - 3}
+              </span>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1" />
+        )}
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-7 w-7 p-0 flex items-center justify-center"
+              />
+            }
+          >
+            <MoreHorizontal className="h-3 w-3" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => setEditDialogOpen(true)}
+              className="flex items-center gap-2"
+            >
+              <Pencil className="h-4 w-4" /> Edit
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              className="text-destructive focus:text-destructive flex items-center gap-2"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4 text-destructive" /> Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
 
       {isImage && (
         <ImageDialog

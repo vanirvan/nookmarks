@@ -1,9 +1,7 @@
 import {
   boolean,
-  date,
   foreignKey,
   index,
-  integer,
   jsonb,
   pgEnum,
   pgTable,
@@ -14,13 +12,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-export const aiStatus = pgEnum("ai_status", [
-  "idle",
-  "pending",
-  "completed",
-  "failed",
-  "skipped",
-]);
 export const bookmarkType = pgEnum("bookmark_type", ["bookmark", "image"]);
 export const tagColor = pgEnum("tag_color", [
   "gray",
@@ -146,8 +137,6 @@ export const bookmarks = pgTable(
     imagePath: text("image_path"),
     description: text(),
     comments: text(),
-    aiStatus: aiStatus("ai_status").default("skipped"),
-    aiError: text("ai_error"),
     aiMetadata: jsonb("ai_metadata"),
     createdAt: timestamp("created_at", { mode: "string" })
       .defaultNow()
@@ -192,65 +181,6 @@ export const collections = pgTable(
       columns: [table.userId],
       foreignColumns: [users.id],
       name: "collections_user_id_users_id_fk",
-    }).onDelete("cascade"),
-  ],
-);
-
-export const userAiUsage = pgTable(
-  "user_ai_usage",
-  {
-    userId: text("user_id").primaryKey().notNull(),
-    callsUsed: integer("calls_used").default(0).notNull(),
-    quotaLimit: integer("quota_limit").default(60).notNull(),
-    periodStart: date("period_start").notNull(),
-    periodEnd: date("period_end").notNull(),
-    createdAt: timestamp("created_at", { mode: "string" })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { mode: "string" })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    index("user_ai_usage_periodEnd_idx").using(
-      "btree",
-      table.periodEnd.asc().nullsLast().op("date_ops"),
-    ),
-    index("user_ai_usage_userId_idx").using(
-      "btree",
-      table.userId.asc().nullsLast().op("text_ops"),
-    ),
-    foreignKey({
-      columns: [table.userId],
-      foreignColumns: [users.id],
-      name: "user_ai_usage_user_id_users_id_fk",
-    }).onDelete("cascade"),
-  ],
-);
-
-export const userApiKeys = pgTable(
-  "user_api_keys",
-  {
-    userId: text("user_id").primaryKey().notNull(),
-    geminiApiKey: text("gemini_api_key").notNull(),
-    isValid: boolean("is_valid").default(true).notNull(),
-    lastTestedAt: timestamp("last_tested_at", { mode: "string" }).notNull(),
-    createdAt: timestamp("created_at", { mode: "string" })
-      .defaultNow()
-      .notNull(),
-    updatedAt: timestamp("updated_at", { mode: "string" })
-      .defaultNow()
-      .notNull(),
-  },
-  (table) => [
-    index("user_api_keys_userId_idx").using(
-      "btree",
-      table.userId.asc().nullsLast().op("text_ops"),
-    ),
-    foreignKey({
-      columns: [table.userId],
-      foreignColumns: [users.id],
-      name: "user_api_keys_user_id_users_id_fk",
     }).onDelete("cascade"),
   ],
 );

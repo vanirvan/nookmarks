@@ -7,8 +7,6 @@ import {
   collections,
   sessions,
   tags,
-  userAiUsage,
-  userApiKeys,
   users,
 } from "./schema";
 
@@ -25,8 +23,6 @@ export const usersRelations = relations(users, ({ many }) => ({
   bookmarks: many(bookmarks),
   collections: many(collections),
   tags: many(tags),
-  userAiUsages: many(userAiUsage),
-  userApiKeys: many(userApiKeys),
 }));
 
 export const sessionsRelations = relations(sessions, ({ one }) => ({
@@ -51,20 +47,6 @@ export const collectionsRelations = relations(collections, ({ one, many }) => ({
     references: [users.id],
   }),
   bookmarkCollections: many(bookmarkCollections),
-}));
-
-export const userAiUsageRelations = relations(userAiUsage, ({ one }) => ({
-  user: one(users, {
-    fields: [userAiUsage.userId],
-    references: [users.id],
-  }),
-}));
-
-export const userApiKeysRelations = relations(userApiKeys, ({ one }) => ({
-  user: one(users, {
-    fields: [userApiKeys.userId],
-    references: [users.id],
-  }),
 }));
 
 export const bookmarkTagsRelations = relations(bookmarkTags, ({ one }) => ({

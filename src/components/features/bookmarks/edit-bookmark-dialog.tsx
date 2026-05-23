@@ -49,7 +49,7 @@ interface Bookmark {
   imagePath: string | null;
   description: string | null;
   comments?: string | null;
-  aiMetadata?: Record<string, any> | null;
+  aiMetadata?: Record<string, unknown> | null;
   bookmarkTags?: Array<{
     tagId: string;
   }>;
@@ -94,7 +94,6 @@ export function EditBookmarkDialog({
       url: bookmark.url || "",
       imagePath: bookmark.imagePath || "",
       description: bookmark.description || "",
-      customDescription: bookmark.aiMetadata?.customDescription || "",
       comments: bookmark.comments || "",
       tags: bookmark.bookmarkTags?.map((bt) => bt.tagId) || [],
       collectionIds:
@@ -110,7 +109,6 @@ export function EditBookmarkDialog({
       url: bookmark.url || "",
       imagePath: bookmark.imagePath || "",
       description: bookmark.description || "",
-      customDescription: bookmark.aiMetadata?.customDescription || "",
       comments: bookmark.comments || "",
       tags: bookmark.bookmarkTags?.map((bt) => bt.tagId) || [],
       collectionIds:

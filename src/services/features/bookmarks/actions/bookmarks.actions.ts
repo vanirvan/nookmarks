@@ -20,8 +20,6 @@ import {
   bookmarks,
   bookmarkTags,
   tags,
-  userAiUsage,
-  userApiKeys,
 } from "@/lib/db/schema";
 import { createSafeAction } from "@/lib/safe-action";
 import {
@@ -37,63 +35,6 @@ export const createBookmark = createSafeAction(
   createBookmarkSchema,
   async (validatedData, session) => {
     return await db.transaction(async (tx) => {
-      // Check if user has BYOK
-      const apiKey = await tx.query.userApiKeys.findFirst({
-        where: eq(userApiKeys.userId, session.user.id),
-      });
-      const hasCustomApiKey = !!apiKey?.geminiApiKey;
-
-      // Check if AI processing is requested
-      const needsAI = validatedData.aiTagging || validatedData.aiDescription;
-
-      // If AI requested and no BYOK, check quota
-      if (needsAI && !hasCustomApiKey) {
-        // Get or create usage record
-        let usage = await tx.query.userAiUsage.findFirst({
-          where: eq(userAiUsage.userId, session.user.id),
-        });
-
-        if (!usage) {
-          // Create new usage record
-          const now = new Date();
-          const periodStart = new Date(
-            now.getFullYear(),
-            now.getMonth(),
-            1,
-          ).toISOString();
-          const periodEnd = new Date(
-            now.getFullYear(),
-            now.getMonth() + 1,
-            0,
-          ).toISOString();
-
-          const [newUsage] = await tx
-            .insert(userAiUsage)
-            .values({
-              userId: session.user.id,
-              callsUsed: 0,
-              quotaLimit: 60,
-              periodStart,
-              periodEnd,
-            })
-            .returning();
-          usage = newUsage;
-        }
-
-        // Check quota
-        if (usage.callsUsed >= usage.quotaLimit) {
-          throw new Error(
-            "AI quota exceeded. Please add your own API key in settings or wait until next month.",
-          );
-        }
-
-        // Increment quota (will be used when AI processes)
-        await tx
-          .update(userAiUsage)
-          .set({ callsUsed: usage.callsUsed + 1 })
-          .where(eq(userAiUsage.userId, session.user.id));
-      }
-
       // Store bookmark
       const [newBookmark] = await tx
         .insert(bookmarks)
@@ -105,7 +46,6 @@ export const createBookmark = createSafeAction(
             validatedData.type === "image" ? validatedData.imagePath : null,
           description: validatedData.description,
           comments: validatedData.comments,
-          aiStatus: needsAI ? "pending" : "idle",
           aiMetadata: {
             extractedTitle: "",
             extractedDescription: "",
@@ -117,35 +57,13 @@ export const createBookmark = createSafeAction(
         .returning();
 
       if (validatedData.type === "bookmark" && validatedData.url) {
-        if (needsAI) {
-          // Trigger the Hono background worker webhook (fire-and-forget)
-          const workerUrl =
-            process.env.AI_WORKER_URL || "http://localhost:3001";
-          void fetch(`${workerUrl}/process-bookmark`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              bookmarkId: newBookmark.id,
-              userId: session.user.id,
-              needsAI: true,
-            }),
-          }).catch((err) => {
-            console.error(
-              "Failed to trigger AI background worker webhook:",
-              err,
-            );
-          });
-        } else {
-          // Auto-fetch metadata for URL bookmarks (fire and forget)
-          void fetchAndUpdateBookmarkMetadataInternal(
-            newBookmark.id,
-            session.user.id,
-          ).catch((err) => {
-            console.error("Failed to fetch metadata:", err);
-          });
-        }
+        // Auto-fetch metadata for URL bookmarks (fire and forget)
+        void fetchAndUpdateBookmarkMetadataInternal(
+          newBookmark.id,
+          session.user.id,
+        ).catch((err) => {
+          console.error("Failed to fetch metadata:", err);
+        });
       }
 
       if (validatedData.tags && validatedData.tags.length > 0) {
@@ -524,7 +442,7 @@ export const updateBookmark = createSafeAction(
       if (!existingBookmark) throw new Error("Bookmark not found");
 
       const existingAiMetadata =
-        (existingBookmark.aiMetadata as Record<string, any>) || {};
+        (existingBookmark.aiMetadata as Record<string, unknown>) || {};
       const aiMetadata = {
         ...existingAiMetadata,
         customDescription: validatedData.customDescription,
@@ -801,14 +719,6 @@ export async function fetchAndUpdateBookmarkMetadataInternal(
   }
 
   try {
-    // Set status to pending
-    await db
-      .update(bookmarks)
-      .set({
-        aiStatus: "pending",
-      })
-      .where(eq(bookmarks.id, bookmarkId));
-
     // Fetch metadata
     const metadataResult = await fetchUrlMetadata({ url: bookmark.url });
 
@@ -823,7 +733,7 @@ export async function fetchAndUpdateBookmarkMetadataInternal(
       where: eq(bookmarks.id, bookmarkId),
     });
     const existingAiMetadata =
-      (latestBookmark?.aiMetadata as Record<string, any>) || {};
+      (latestBookmark?.aiMetadata as Record<string, unknown>) || {};
 
     const aiMetadata = {
       ...existingAiMetadata,
@@ -834,11 +744,10 @@ export async function fetchAndUpdateBookmarkMetadataInternal(
       fetchedAt: new Date().toISOString(),
     };
 
-    // Update bookmark with metadata and status to completed
+    // Update bookmark with metadata
     const [updated] = await db
       .update(bookmarks)
       .set({
-        aiStatus: "completed",
         aiMetadata: aiMetadata,
         updatedAt: new Date().toISOString(),
       })
@@ -847,14 +756,14 @@ export async function fetchAndUpdateBookmarkMetadataInternal(
 
     return updated;
   } catch (error) {
-    // Store error in metadata and set status to failed
+    // Store error in metadata
     const errorMsg = error instanceof Error ? error.message : String(error);
 
     const latestBookmark = await db.query.bookmarks.findFirst({
       where: eq(bookmarks.id, bookmarkId),
     });
     const existingAiMetadata =
-      (latestBookmark?.aiMetadata as Record<string, any>) || {};
+      (latestBookmark?.aiMetadata as Record<string, unknown>) || {};
 
     const aiMetadata = {
       ...existingAiMetadata,
@@ -869,8 +778,6 @@ export async function fetchAndUpdateBookmarkMetadataInternal(
     const [updated] = await db
       .update(bookmarks)
       .set({
-        aiStatus: "failed",
-        aiError: errorMsg,
         aiMetadata: aiMetadata,
         updatedAt: new Date().toISOString(),
       })

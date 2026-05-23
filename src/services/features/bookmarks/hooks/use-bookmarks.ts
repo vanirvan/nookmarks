@@ -51,11 +51,5 @@ export function useBookmarks(collectionId?: string | null) {
       }
       return response.data;
     },
-    {
-      refreshInterval: (data) => {
-        const hasPending = data?.bookmarks?.some((b) => b.aiStatus === "pending") ?? false;
-        return hasPending ? 3000 : 0;
-      },
-    }
   );
 }
