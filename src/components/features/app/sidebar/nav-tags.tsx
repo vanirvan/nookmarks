@@ -1,7 +1,7 @@
 "use client";
 
-import { ChevronRight, Pin, Plus, Search, Tag } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronRight, Pin, Plus, Search, Tag, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useSWRConfig } from "swr";
 import { CreateTagDialog } from "@/components/features/tags/create-tag-dialog";
@@ -88,13 +88,26 @@ export function NavTags() {
 
   const filteredTags = useMemo(() => {
     if (!tags) return [];
-    if (!searchQuery.trim()) return tags;
     const q = searchQuery.toLowerCase().trim();
-    return tags.filter(
+    if (!q) return tags;
+
+    // Find tags that match title or fullPath
+    const matched = tags.filter(
       (t) =>
         t.title.toLowerCase().includes(q) ||
         t.fullPath.toLowerCase().includes(q),
     );
+
+    // Keep all matched tags and their ancestors so the tree can render down to them
+    const visibleIds = new Set<string>();
+    for (const tag of matched) {
+      const ids = tag.fullPathIDs ? tag.fullPathIDs.split("/") : [tag.id];
+      for (const id of ids) {
+        visibleIds.add(id);
+      }
+    }
+
+    return tags.filter((t) => visibleIds.has(t.id));
   }, [tags, searchQuery]);
 
   const rootTags = useMemo(() => {
@@ -116,8 +129,18 @@ export function NavTags() {
                 placeholder="Search tags..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 h-8 text-xs bg-muted/40 border-none"
+                className="pl-8 pr-8 h-8 text-xs bg-muted/40 border-none"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear tag search"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
           <SidebarMenu>
@@ -151,6 +174,7 @@ export function NavTags() {
                   itemCounts={itemCounts || {}}
                   displayCounts={displaySidebarTagItemCounts}
                   activeTagId={tagFilter}
+                  searchQuery={searchQuery}
                   onTagClick={(tagId) => {
                     setQueryState({
                       tag: tagFilter === tagId ? null : tagId,
@@ -169,6 +193,16 @@ export function NavTags() {
                   onColorChange={handleColorChange}
                 />
               ))
+            ) : searchQuery.trim() ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center gap-1 px-4">
+                <Search className="h-6 w-6 text-muted-foreground/40 mb-1" />
+                <p className="text-xs font-medium text-muted-foreground">
+                  No tags found
+                </p>
+                <p className="text-[10px] text-muted-foreground/70">
+                  No tags match &ldquo;{searchQuery.trim()}&rdquo;
+                </p>
+              </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-8 text-center gap-1">
                 <div className="relative">
@@ -179,7 +213,7 @@ export function NavTags() {
                   Organize with tags
                 </p>
                 <p className="text-[10px] text-muted-foreground max-w-44 leading-relaxed">
-                  Create nested tags using "/" separator
+                  Create nested tags using &quot;/&quot; separator
                 </p>
               </div>
             )}
@@ -218,6 +252,7 @@ function TagTreeItem({
   itemCounts,
   displayCounts,
   activeTagId,
+  searchQuery,
   onTagClick,
   onEdit,
   onDelete,
@@ -230,6 +265,7 @@ function TagTreeItem({
   itemCounts: Record<string, number>;
   displayCounts: boolean;
   activeTagId: string | null | "untagged";
+  searchQuery?: string;
   onTagClick: (tagId: string) => void;
   onEdit: (tag: TagWithPaths) => void;
   onDelete: (tag: TagWithPaths) => void;
@@ -246,6 +282,12 @@ function TagTreeItem({
   const itemCount = itemCounts[tag.id] || 0;
 
   const [isOpen, setIsOpen] = useState(depth < 2);
+
+  useEffect(() => {
+    if (searchQuery?.trim()) {
+      setIsOpen(true);
+    }
+  }, [searchQuery]);
 
   const getColorClass = (color: string): string => {
     const colorMap: Record<string, string> = {
@@ -317,6 +359,7 @@ function TagTreeItem({
                 itemCounts={itemCounts}
                 displayCounts={displayCounts}
                 activeTagId={activeTagId}
+                searchQuery={searchQuery}
                 onTagClick={onTagClick}
                 onEdit={onEdit}
                 onDelete={onDelete}
