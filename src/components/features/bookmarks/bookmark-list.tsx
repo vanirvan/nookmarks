@@ -93,16 +93,16 @@ export function BookmarkList({ collectionId }: BookmarkListProps) {
   return (
     <>
       {/* Select All bar — only show if there are bookmarks */}
-      <div className="flex items-center gap-3 mb-3 px-1">
+      <div className="flex items-center gap-3 mb-3 px-1 w-max">
         <button
           type="button"
-          className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           onClick={() => selectAll(visibleIds)}
+          className="flex items-center gap-2.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <Checkbox
             checked={allVisibleSelected}
             indeterminate={someVisibleSelected}
-            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
             onCheckedChange={() => selectAll(visibleIds)}
           />
           <span>
