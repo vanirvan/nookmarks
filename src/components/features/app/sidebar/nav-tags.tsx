@@ -263,7 +263,7 @@ function TagTreeItem({
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
       <SidebarMenuItem className="relative flex items-center w-full">
-        {hasChildren && (
+        {hasChildren ? (
           <CollapsibleTrigger
             render={
               <button
@@ -276,6 +276,8 @@ function TagTreeItem({
               className={`h-3 w-3 transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
             />
           </CollapsibleTrigger>
+        ) : (
+          <div className="size-5" />
         )}
         <SidebarMenuButton
           onClick={() => onTagClick(tag.id)}
